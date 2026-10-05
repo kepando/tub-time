@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/svg+xml" href="duck.svg">
-<script src="https://alcdn.msftauth.net/browser/2.38.4/js/msal-browser.min.js"></script>
+<script src="https://alcdn.msftauth.net/browser/2.38.1/js/msal-browser.min.js"></script>
 <style>
 :root{
   --bg:#f3f6f9; --card:#ffffff; --ink:#15242e; --muted:#5b6b78; --line:#e2e9ef;
@@ -959,16 +959,18 @@ document.querySelectorAll('nav.tabs button').forEach(b=> b.addEventListener('cli
 $('#moreBtn').addEventListener('click', ()=>go('more'));
 
 async function boot(){
+  const showGate=(err,disable)=>{ $('#gate').classList.remove('hidden'); if(err){ $('#gateErr').textContent=err; $('#gateErr').classList.remove('hidden'); if(disable) $('#signinBtn').disabled=true; } };
   if(CONFIG.MSAL_CLIENT_ID==='YOUR_ENTRA_CLIENT_ID'){
-    $('#gate').classList.remove('hidden');
-    $('#gateErr').textContent='Set CONFIG.MSAL_CLIENT_ID in index.html to your Tub Time Entra app registration (client) ID.';
-    $('#gateErr').classList.remove('hidden'); $('#signinBtn').disabled=true; return;
+    showGate('Set CONFIG.MSAL_CLIENT_ID in index.html to your Tub Time Entra app registration (client) ID.', true); return;
   }
-  initMsal();
-  try{ await msalApp.initialize?.(); }catch(e){}
-  const signed = await restoreAccount();
-  if(signed){ msalApp.setActiveAccount(account); await enterApp(); }
-  else $('#gate').classList.remove('hidden');
+  if(typeof msal==='undefined'){ showGate('Could not load the Microsoft sign-in library. Check your connection and reload.', true); return; }
+  try{
+    initMsal();
+    await (msalApp.initialize?.() || Promise.resolve());
+    const signed = await restoreAccount();
+    if(signed){ msalApp.setActiveAccount(account); await enterApp(); }
+    else $('#gate').classList.remove('hidden');
+  }catch(e){ console.error(e); showGate('Startup error: '+(e.message||e)); }
 }
 $('#signinBtn').addEventListener('click', async ()=>{
   const b=$('#signinBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span> Signing in…';

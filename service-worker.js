@@ -1,6 +1,6 @@
 // Tub Time service worker.
 // Network-first for the app shell (so updates land), cache-first for static assets.
-const CACHE = 'tubtime-v1';
+const CACHE = 'tubtime-v2';
 const ASSETS = [
   './',
   './index.html',
