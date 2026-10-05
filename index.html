@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B87BF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tub Time">
+<title>Tub Time</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/svg+xml" href="duck.svg">
+<script src="https://alcdn.msftauth.net/browser/2.38.4/js/msal-browser.min.js"></script>
+<style>
+:root{
+  --bg:#f3f6f9; --card:#ffffff; --ink:#15242e; --muted:#5b6b78; --line:#e2e9ef;
+  --brand:#1B87BF; --brand-ink:#0d5c86; --accent:#FFC21E;
+  --good:#1f9d57; --warn:#e0a106; --bad:#d64545; --good-bg:#e4f6ec; --warn-bg:#fcf3dc; --bad-bg:#fbe6e6;
+  --safe-top:env(safe-area-inset-top); --safe-bottom:env(safe-area-inset-bottom);
+  --shadow:0 1px 3px rgba(16,40,60,.08),0 1px 2px rgba(16,40,60,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b1620; --card:#15242e; --ink:#eaf1f6; --muted:#9db0bd; --line:#24384a;
+    --brand:#3fb0e6; --brand-ink:#8fd3f3; --accent:#FFC21E;
+    --good:#49c27e; --warn:#e8bc4a; --bad:#f07070; --good-bg:#12331f; --warn-bg:#33290c; --bad-bg:#3a1414;
+    --shadow:0 1px 3px rgba(0,0,0,.4);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; line-height:1.4;}
+button{font-family:inherit; cursor:pointer}
+a{color:var(--brand)}
+h1,h2,h3{margin:0 0 .4em}
+h2{font-size:1.15rem} h3{font-size:1rem}
+small{color:var(--muted)}
+.hidden{display:none !important}
+
+header.app{position:sticky; top:0; z-index:20; background:var(--card); border-bottom:1px solid var(--line);
+  padding:calc(var(--safe-top) + 10px) 14px 10px; display:flex; align-items:center; gap:10px;}
+header.app img{width:30px; height:30px}
+header.app .title{font-weight:700; font-size:1.1rem; letter-spacing:.2px}
+header.app .spacer{flex:1}
+.iconbtn{background:none; border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:7px 11px; font-size:.85rem}
+
+main{max-width:720px; margin:0 auto; padding:14px 14px 96px; min-height:60vh}
+
+nav.tabs{position:fixed; bottom:0; left:0; right:0; z-index:20; background:var(--card); border-top:1px solid var(--line);
+  display:flex; padding-bottom:var(--safe-bottom);}
+nav.tabs button{flex:1; background:none; border:none; color:var(--muted); padding:9px 2px; font-size:.68rem;
+  display:flex; flex-direction:column; align-items:center; gap:3px}
+nav.tabs button .ic{font-size:1.25rem; line-height:1}
+nav.tabs button.active{color:var(--brand)}
+
+.card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; box-shadow:var(--shadow)}
+.card.tight{padding:12px 14px}
+.row{display:flex; align-items:center; gap:10px}
+.row.between{justify-content:space-between}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.stack>*+*{margin-top:10px}
+
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:7px; border:none; border-radius:12px;
+  background:var(--brand); color:#fff; font-weight:600; font-size:1rem; padding:13px 16px; width:100%;}
+.btn.sm{padding:9px 13px; font-size:.9rem; width:auto}
+.btn.ghost{background:transparent; color:var(--brand); border:1px solid var(--brand)}
+.btn.sub{background:var(--line); color:var(--ink)}
+.btn.danger{background:var(--bad)}
+.btn:disabled{opacity:.5}
+.btn.big{padding:18px; font-size:1.1rem}
+
+label.fld{display:block; font-size:.85rem; color:var(--muted); margin-bottom:5px}
+input,select,textarea{width:100%; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--bg);
+  color:var(--ink); font-size:1rem; font-family:inherit}
+textarea{min-height:96px; resize:vertical}
+
+.pill{display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; font-size:.78rem; font-weight:600}
+.pill.good{background:var(--good-bg); color:var(--good)}
+.pill.warn{background:var(--warn-bg); color:var(--warn)}
+.pill.bad{background:var(--bad-bg); color:var(--bad)}
+.pill.neutral{background:var(--line); color:var(--muted)}
+
+.chips{display:flex; flex-wrap:wrap; gap:8px}
+.chip{border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:999px; padding:9px 14px; font-size:.95rem; min-width:46px; text-align:center}
+.chip.on{background:var(--brand); color:#fff; border-color:var(--brand)}
+.chip.range{border-style:dashed}
+
+.statusbar{height:6px; border-radius:999px; background:var(--line); overflow:hidden; margin-top:6px}
+.banner{border-radius:14px; padding:13px 15px; font-weight:600; margin-bottom:14px; display:flex; gap:10px; align-items:center}
+.banner.due{background:var(--warn-bg); color:var(--warn)}
+
+.listrow{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:11px 0; border-top:1px solid var(--line)}
+.listrow:first-child{border-top:none}
+.muted{color:var(--muted)}
+.kv{display:flex; justify-content:space-between; gap:10px; padding:3px 0}
+.kv b{font-weight:600}
+
+.step{border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; background:var(--card)}
+.step.done{opacity:.6}
+.step.active{border-color:var(--brand); box-shadow:0 0 0 2px rgba(27,135,191,.15)}
+.step .num{display:inline-flex; width:26px; height:26px; border-radius:50%; background:var(--brand); color:#fff; align-items:center; justify-content:center; font-size:.85rem; font-weight:700; flex:none}
+.why{font-size:.88rem; color:var(--muted); margin-top:6px}
+.timer{font-variant-numeric:tabular-nums; font-weight:700; font-size:1.3rem}
+
+.toast{position:fixed; left:50%; bottom:calc(var(--safe-bottom) + 74px); transform:translateX(-50%); background:var(--ink); color:var(--bg);
+  padding:11px 16px; border-radius:12px; font-size:.9rem; z-index:50; max-width:90%; text-align:center; box-shadow:var(--shadow)}
+.center{text-align:center}
+.empty{text-align:center; color:var(--muted); padding:30px 10px}
+.empty img{width:72px; opacity:.85; margin-bottom:10px}
+.spin{display:inline-block;width:18px;height:18px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.err{background:var(--bad-bg); color:var(--bad); border-radius:12px; padding:11px 14px; font-size:.9rem; margin:10px 0}
+.hint{font-size:.82rem; color:var(--muted)}
+pre.raw{white-space:pre-wrap; background:var(--bg); padding:12px; border-radius:10px; font-size:.82rem; overflow:auto}
+.flaglist li{margin:3px 0}
+.syncdot{width:9px;height:9px;border-radius:50%;background:var(--good)}
+.syncdot.pending{background:var(--warn)}
+.syncdot.err{background:var(--bad)}
+</style>
+</head>
+<body>
+
+<!-- Sign-in gate -->
+<div id="gate" class="hidden" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center">
+  <img src="duck.svg" width="96" height="96" alt="">
+  <h1 style="margin:14px 0 4px">Tub Time</h1>
+  <p class="muted" style="max-width:300px">Hot tub treatment & maintenance, remembered for you.</p>
+  <button id="signinBtn" class="btn" style="max-width:280px;margin-top:18px">Sign in with Microsoft</button>
+  <div id="gateErr" class="err hidden" style="max-width:320px"></div>
+</div>
+
+<!-- App -->
+<div id="app" class="hidden">
+  <header class="app">
+    <img src="duck.svg" alt="">
+    <span class="title">Tub Time</span>
+    <span class="spacer"></span>
+    <span id="syncDot" class="syncdot" title="Saved"></span>
+    <button class="iconbtn" id="moreBtn">More</button>
+  </header>
+  <main id="view"></main>
+  <nav class="tabs">
+    <button data-route="dashboard" class="active"><span class="ic">🏠</span>Home</button>
+    <button data-route="test"><span class="ic">🧪</span>Test</button>
+    <button data-route="soak"><span class="ic">♨️</span>Soak</button>
+    <button data-route="log"><span class="ic">📋</span>Log</button>
+    <button data-route="more"><span class="ic">⚙️</span>More</button>
+  </nav>
+</div>
+
+<script>
+/* ============================================================
+   Tub Time — Phase 1
+   Stack: vanilla JS PWA, MSAL.js auth, OneDrive (Graph) storage,
+   Claude (browser-direct, key held in OneDrive settings.json).
+   ============================================================ */
+
+const CONFIG = {
+  MSAL_CLIENT_ID: '832dfba8-a554-4df1-8a20-425ec01e8019',  // Tub Time Entra app registration (client) ID
+  AUTHORITY: 'https://login.microsoftonline.com/consumers',
+  SCOPES: ['User.Read', 'Files.ReadWrite'],        // Calendars.ReadWrite added in Phase 2
+  GRAPH: 'https://graph.microsoft.com/v1.0',
+  BASE_PATH: '/zApplications/TubTime',             // all app data lives here; never the OneDrive root
+  CLAUDE_API: 'https://api.anthropic.com/v1/messages',
+  CLAUDE_MODEL: 'claude-opus-4-8',                 // supports image input (Phase 2 label photos)
+  ANTHROPIC_VERSION: '2023-06-01',
+};
+
+/* ---------- small helpers ---------- */
+const $ = (sel, el=document) => el.querySelector(sel);
+const el = (tag, props={}, kids=[]) => {
+  const n = document.createElement(tag);
+  for (const k in props){ if(k==='class') n.className=props[k]; else if(k==='html') n.innerHTML=props[k]; else if(k.startsWith('on')) n.addEventListener(k.slice(2),props[k]); else if(props[k]!=null) n.setAttribute(k,props[k]); }
+  (Array.isArray(kids)?kids:[kids]).forEach(c=>{ if(c==null) return; n.appendChild(typeof c==='string'?document.createTextNode(c):c); });
+  return n;
+};
+const uid = () => (Date.now().toString(36) + Math.random().toString(36).slice(2,7));
+const nowISO = () => new Date().toISOString();
+const fmtDate = (iso) => { if(!iso) return '—'; const d=new Date(iso); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); };
+const daysSince = (iso) => iso ? Math.floor((Date.now()-new Date(iso))/86400000) : null;
+const hoursSince = (iso) => iso ? Math.floor((Date.now()-new Date(iso))/3600000) : null;
+function toast(msg){ const t=el('div',{class:'toast'},msg); document.body.appendChild(t); setTimeout(()=>t.remove(),2600); }
+function agoText(iso){ if(!iso) return 'never'; const d=daysSince(iso); if(d===0){const h=hoursSince(iso); return h<=0?'just now':h+'h ago';} return d+'d ago'; }
+
+/* ============================================================
+   AUTH (MSAL)
+   ============================================================ */
+let msalApp=null, account=null;
+function initMsal(){
+  msalApp = new msal.PublicClientApplication({
+    auth:{ clientId:CONFIG.MSAL_CLIENT_ID, authority:CONFIG.AUTHORITY, redirectUri:location.origin+location.pathname },
+    cache:{ cacheLocation:'localStorage', storeAuthStateInCookie:false }
+  });
+}
+async function restoreAccount(){ const a=msalApp.getAllAccounts(); if(a.length){ account=a[0]; return true; } return false; }
+async function signIn(){
+  // loginPopup works in iOS Safari and installed PWA; loginRedirect breaks standalone PWAs.
+  const r = await msalApp.loginPopup({ scopes:CONFIG.SCOPES });
+  account = r.account; msalApp.setActiveAccount(account);
+}
+async function getToken(){
+  try{ const r=await msalApp.acquireTokenSilent({ scopes:CONFIG.SCOPES, account }); return r.accessToken; }
+  catch(e){ const r=await msalApp.acquireTokenPopup({ scopes:CONFIG.SCOPES }); account=r.account; return r.accessToken; }
+}
+function signOut(){ msalApp.logoutPopup({ account }).catch(()=>{}); localStorage.removeItem('tt_mirror'); }
+
+/* ============================================================
+   GRAPH / ONEDRIVE STORAGE
+   Path-based addressing, eTag conflict handling, local mirror,
+   and a retry queue so a failed save never loses a log entry.
+   ============================================================ */
+const itemPath = (name) => `${CONFIG.GRAPH}/me/drive/root:${CONFIG.BASE_PATH}/${name}`;
+const contentUrl = (name) => itemPath(name)+':/content';
+
+async function graph(url, opts={}){
+  const token = await getToken();
+  const headers = Object.assign({ Authorization:'Bearer '+token }, opts.headers||{});
+  const res = await fetch(url, Object.assign({}, opts, { headers }));
+  return res;
+}
+async function ensureFolders(){
+  // Create TubTime (and knowledge/) if missing. /zApplications already exists.
+  async function mkdir(parentPath, name){
+    const res = await graph(`${CONFIG.GRAPH}/me/drive/root:${parentPath}:/children`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ name, folder:{}, '@microsoft.graph.conflictBehavior':'fail' })
+    });
+    if(!res.ok && res.status!==409){ /* 409 = already exists, fine */ const t=await res.text(); console.warn('mkdir',name,res.status,t); }
+  }
+  await mkdir('/zApplications','TubTime');
+  await mkdir(CONFIG.BASE_PATH,'knowledge');
+}
+const etags = {};
+async function readFile(name){
+  // metadata first (for eTag), then content
+  const meta = await graph(itemPath(name));
+  if(meta.status===404) return { missing:true };
+  if(!meta.ok) throw new Error('read meta '+name+' → '+meta.status);
+  const m = await meta.json(); etags[name]=m.eTag;
+  const c = await graph(contentUrl(name));
+  if(!c.ok) throw new Error('read content '+name+' → '+c.status);
+  return { text: await c.text() };
+}
+async function writeFile(name, text){
+  const doPut = async (etag) => graph(contentUrl(name), {
+    method:'PUT',
+    headers: Object.assign({'Content-Type':'application/octet-stream'}, etag?{'If-Match':etag}:{}),
+    body: text
+  });
+  let res = await doPut(etags[name]);
+  if(res.status===412){ // conflict → refresh eTag and retry once
+    const meta = await graph(itemPath(name)); if(meta.ok){ etags[name]=(await meta.json()).eTag; }
+    res = await doPut(etags[name]);
+  }
+  if(!res.ok) throw new Error('write '+name+' → '+res.status);
+  const item = await res.json(); etags[name]=item.eTag;
+  return true;
+}
+
+/* ---- local mirror + write queue ---- */
+function mirrorLoad(){ try{ return JSON.parse(localStorage.getItem('tt_mirror')||'{}'); }catch(e){ return {}; } }
+function mirrorSave(obj){ localStorage.setItem('tt_mirror', JSON.stringify(obj)); }
+let queue = {};            // name -> text pending upload
+try{ queue = JSON.parse(localStorage.getItem('tt_queue')||'{}'); }catch(e){ queue={}; }
+const persistQueue = () => localStorage.setItem('tt_queue', JSON.stringify(queue));
+let flushing=false;
+function setSync(state){ const d=$('#syncDot'); if(!d) return; d.className='syncdot'+(state==='pending'?' pending':state==='err'?' err':''); d.title=state==='pending'?'Saving…':state==='err'?'Save failed — will retry':'Saved'; }
+
+async function flushQueue(){
+  if(flushing) return; const names=Object.keys(queue); if(!names.length){ setSync('ok'); return; }
+  flushing=true; setSync('pending');
+  for(const name of names){
+    try{ await writeFile(name, queue[name]); delete queue[name]; persistQueue(); }
+    catch(e){ console.warn('flush failed',name,e); setSync('err'); flushing=false; setTimeout(flushQueue,15000); return; }
+  }
+  flushing=false; setSync('ok');
+}
+window.addEventListener('online', flushQueue);
+setInterval(flushQueue, 30000);
+
+/* ============================================================
+   STATE / COLLECTIONS
+   ============================================================ */
+const FILES = {
+  settings:'settings.json', products:'products.json', tests:'tests.json',
+  soaks:'soaks.json', maintenance:'maintenance.json', events:'events.json',
+  rules:'knowledge/rules.md'
+};
+const state = { settings:null, products:null, tests:null, soaks:null, maintenance:null, events:null, rules:'' };
+
+function queueSave(key){
+  const name = FILES[key];
+  const text = key==='rules' ? state.rules : JSON.stringify(state[key], null, 2);
+  queue[name] = text; persistQueue();
+  const mir = mirrorLoad(); mir[key] = key==='rules'?state.rules:state[key]; mirrorSave(mir);
+  setSync('pending');
+  clearTimeout(queueSave._t); queueSave._t=setTimeout(flushQueue, 1200);
+}
+
+/* ---- seed defaults ---- */
+const DEFAULT_RULES = `# Hot Tub Chemistry Rules (Ken's tub)
+
+## Sequencing
+- Alkalinity before everything. In any correction or rescue, fix alkalinity first; it's the foundation that makes other corrections hold.
+- Calcium before shock when both are needed, so shock doesn't bleach the hardness pad mid-adjustment.
+- Defoamer goes last, after shock has circulated, at roughly HALF the label dose (full doses add to TDS buildup).
+- Small, conservative doses with a retest between passes. Never one large correction.
+
+## Sanitizer & shock
+- Shock is soak-triggered, not calendar-based. A fixed weekly shock plus routine pH Down use wore down alkalinity and caused repeated crashes (alkalinity bottoms out → pH drops → bromine zeros).
+- After a soak, especially multiple people or long soaks, shock to bring bromine back. Tablets alone can't keep up with heavy bather load.
+- Don't rely on a last-minute shock to make a soak possible. Keep bromine topped up with tablets; shock when the water can recover before the next soak.
+- Tablets dissolve only with water flow. The filter compartment (in the pump path) is more reliable than the floater.
+- Split tablets between the filter compartment and floater. Concentrating acidic tablets in one spot during pump-off periods can slowly corrode the heater and metal fittings.
+- Floater vent dial doesn't hold its position; check it when bromine runs low.
+- No soaking until bromine is 3–5 ppm. Above ~5 (e.g., 10+), it's harsh on skin and eyes: let it come down before soaking.
+
+## pH & alkalinity
+- pH Down only when pH is above ~7.8.
+- Alkalinity Up raises pH along with it; after adding it, don't add pH Up until you've retested.
+- If alkalinity and pH are in range, say "leave them alone." Don't make unnecessary adjustments.
+
+## Test strip quirks
+- High sanitizer bleaches the alkalinity and hardness pads, giving false-LOW readings. pH reads accurately even when sanitizer is high.
+- A sudden large drop (e.g., alkalinity 120 → 0 after a small shock) isn't chemically possible. Treat it as a bleached-pad artifact; don't dose against it.
+- The best time to trust a hardness reading is when bromine is near 0.
+- The hardness pad drifts after 30 seconds; only the 30-second read is reliable.
+- Test procedure: run jets on high 15–20 min, read at 30 seconds, in good light. Low or evening light causes misreads.
+
+## Foam & water age
+- Persistent foam comes from low calcium hardness and/or aging water with high TDS. Chemicals can only do so much; sometimes a drain is the right answer. Say so directly when it is.
+
+## Enzyme clarifier ("natural enzymes")
+- Part of the routine, not a rescue product. Enzymes break down non-living organics (body oils, lotions, sweat, deodorant residue) so the sanitizer and filter can clear them. That means less foam, less scum line, and lower bromine demand after soaks.
+- Dose: small and weekly, per the label, scaled to 305 gal (use the active enzyme product's data).
+- Timing: add it when bromine is in the normal 3–5 range. NOT right after shocking, because fresh shock weakens the enzymes. If a shock is due, shock first and schedule the enzyme dose for a later session once bromine has settled. Never put enzymes and shock in the same session.
+- Enzymes don't sanitize. They never replace shock or tablets.
+- For foam, prefer enzymes (removes the cause) over defoamer (only knocks bubbles down). Defoamer is still fine at half dose for immediate knockdown.
+- If enzyme dosing is overdue and the water is foaming or bromine demand is high, mention it in the plan.
+
+## Maintenance
+- Drain/refill quarterly (sooner if foam becomes unmanageable).
+`;
+
+function defaultSettings(){
+  return {
+    schemaVersion:1,
+    tub:{ model:'LifeSmart Leganza', persons:6, gallons:305, sanitizer:'bromine',
+      tablets:'2 in filter compartment (primary) + 2–3 in floating dispenser (supplement)',
+      filterCyclesHoursPerDay:4, idleTempF:'98–100', location:'Portland, OR', fillWater:'very soft' },
+    targets:{
+      alkalinity:{target:100, min:80, max:120, unit:'ppm'},
+      ph:{target:7.5, min:7.4, max:7.6, unit:''},
+      hardness:{target:150, min:150, max:250, unit:'ppm'},
+      bromine:{target:4, min:3, max:5, unit:'ppm'}
+    },
+    typicalFreshFill:{ hardness:'0–25', alkalinity:'0–40', ph:'6.8–7.2', bromine:0 },
+    maintenanceIntervals:{ enzymeDays:7, drainDays:90, filterRinseDays:14, filterReplaceDays:365 },
+    schedulingWindows:{ weekdayStartTime:'19:30', weekendStart:'12:00', weekendEnd:'15:00' },
+    excludedCalendars:[],
+    apiKey:''
+  };
+}
+function defaultProducts(){
+  const p = (o)=>Object.assign({ id:uid(), active:true, archived:false, dosePerGal:null, doseConverted:'', unit:'', warnings:'', imagePath:null, notes:'' }, o);
+  return {
+    schemaVersion:1,
+    categories:['Test strips','Bromine tablets','Calcium (hardness) increaser','Alkalinity increaser','Shock','pH Up','pH Down','Anti-foam','Enzyme clarifier'],
+    items:[
+      p({ category:'Alkalinity increaser', brand:'Oester', name:'Alkalinity Up', activeIngredient:'sodium bicarbonate' }),
+      p({ category:'pH Up', brand:'Oester', name:'pH Up', activeIngredient:'sodium carbonate' }),
+      p({ category:'pH Down', brand:'Oester', name:'pH Down', activeIngredient:'sodium bisulfate', warnings:'Only when pH is above ~7.8.' }),
+      p({ category:'Calcium (hardness) increaser', brand:'Oester', name:'Calcium Increaser', activeIngredient:'calcium chloride (liquid)', doseConverted:'≈ ¼ cup raises hardness ~23 ppm in 305 gal', unit:'cup' }),
+      p({ category:'Shock', brand:'SpaGuard', name:'Enhanced Shock', activeIngredient:'non-chlorine MPS (potassium monopersulfate)', dosePerGal:'3 tbsp / 500 gal (label)', doseConverted:'≈ 5½ tsp per dose for 305 gal', unit:'tsp' }),
+      p({ category:'Bromine tablets', brand:'Bromiguard', name:'1-inch bromine tablets', activeIngredient:'bromine (BCDMH)', doseConverted:'2 in filter compartment + 2–3 in floater', unit:'tablet' }),
+      p({ category:'Anti-foam', brand:'', name:'Foam reducer / defoamer', activeIngredient:'', doseConverted:'HALF label dose; last, after shock has circulated', unit:'' }),
+      p({ category:'Enzyme clarifier', brand:'(TBD — must be bromine-compatible)', name:'Spa enzyme clarifier', activeIngredient:'enzymes', doseConverted:'small weekly dose per label, scaled to 305 gal', unit:'' }),
+      p({ category:'Test strips', brand:'(current)', name:'7-pad test strips', activeIngredient:'', stripVersion:'1.0 (11-2025)', stripProfile:{
+        pads:[
+          { name:'Total Hardness', unit:'ppm', chart:[0,25,50,120,250,425] },
+          { name:'Total Chlorine', unit:'ppm', chart:[0,0.5,1,3,5,10,20] },
+          { name:'Free Chlorine', unit:'ppm', chart:[0,0.5,1,3,5,10,20] },
+          { name:'Bromine', unit:'ppm', chart:[0,1,2,6,10,20,40] },
+          { name:'Total Alkalinity', unit:'ppm', chart:[0,40,80,120,180,240,360] },
+          { name:'Cyanuric Acid', unit:'ppm', chart:[0,'30-50',100,150,240] },
+          { name:'pH', unit:'', chart:[6.2,6.8,7.2,7.6,7.8,8.4] }
+        ]
+      }})
+    ]
+  };
+}
+const emptyColl = () => ({ schemaVersion:1, items:[] });
+
+async function loadAll(){
+  await ensureFolders();
+  const defaults = { settings:defaultSettings, products:defaultProducts, tests:emptyColl, soaks:emptyColl, maintenance:emptyColl, events:emptyColl };
+  for(const key of ['settings','products','tests','soaks','maintenance','events']){
+    const f = await readFile(FILES[key]);
+    if(f.missing){ state[key]=defaults[key](); await writeFile(FILES[key], JSON.stringify(state[key],null,2)); }
+    else { try{ state[key]=JSON.parse(f.text); }catch(e){ state[key]=defaults[key](); } }
+  }
+  const r = await readFile(FILES.rules);
+  if(r.missing){ state.rules=DEFAULT_RULES; await writeFile(FILES.rules, DEFAULT_RULES); }
+  else state.rules = r.text;
+  // mirror snapshot
+  const mir={}; for(const k in state) mir[k]=state[k]; mirrorSave(mir);
+  setSync('ok');
+}
+
+/* ---- derived helpers ---- */
+const activeStrip = () => (state.products.items.find(p=>p.category==='Test strips' && p.active && !p.archived && p.stripProfile) || state.products.items.find(p=>p.stripProfile));
+const activeProducts = () => state.products.items.filter(p=>p.active && !p.archived);
+const sortedTests = () => [...state.tests.items].sort((a,b)=> new Date(b.timestamp)-new Date(a.timestamp));
+const sortedSoaks = () => [...state.soaks.items].sort((a,b)=> new Date(b.datetime)-new Date(a.datetime));
+const lastTest = () => sortedTests()[0] || null;
+const lastSoak = () => sortedSoaks()[0] || null;
+function lastTreatment(){ // most recent test session that recorded completed dosing steps
+  for(const t of sortedTests()){ if((t.completedSteps||[]).some(s=>s.status==='done' && s.action)) return t; }
+  return null;
+}
+function lastDrain(){ const d=[...state.maintenance.items].filter(m=>m.type==='drain-refill').sort((a,b)=>new Date(b.date)-new Date(a.date)); return d[0]||null; }
+function lastMaint(type){ const d=[...state.maintenance.items].filter(m=>m.type===type).sort((a,b)=>new Date(b.date)-new Date(a.date)); return d[0]||null; }
+function soaksSince(iso){ const since=iso?new Date(iso):new Date(0); return sortedSoaks().filter(s=> new Date(s.datetime)>since); }
+
+/* ============================================================
+   CLAUDE — treatment plan generation
+   ============================================================ */
+function buildSystemPrompt(){
+  const s=state.settings, t=s.targets;
+  return state.rules + `
+
+## Tub profile
+Model: ${s.tub.model} — ${s.tub.persons}-person, ~${s.tub.gallons} gallons. Sanitizer: ${s.tub.sanitizer}.
+Tablets: ${s.tub.tablets}. Filter cycles: ~${s.tub.filterCyclesHoursPerDay} hrs/day. Idle temp: ${s.tub.idleTempF}°F. Location: ${s.tub.location}; fill water ${s.tub.fillWater}.
+Measuring tools: teaspoons and cups only — every dose must be in tsp/cup (or tablets). No tablespoons or fluid ounces.
+
+## Targets
+Alkalinity ~${t.alkalinity.target} ppm (band ${t.alkalinity.min}–${t.alkalinity.max}). pH ${t.ph.min}–${t.ph.max}. Hardness ~${t.hardness.target} ppm (${t.hardness.min}–${t.hardness.max} acceptable). Bromine ${t.bromine.min}–${t.bromine.max} ppm.
+
+You are Ken's hot tub assistant. Open with the single priority, give numbered steps in order (alkalinity first when needed), each with the exact dose in tsp/cup/tablet for ${s.tub.gallons} gal, the product, jets, lid, and circulation time, plus a short "why". Flag strip artifacts before dosing against suspicious numbers. Give a "leave alone" line for in-range parameters and a clear soak-readiness call. Be honest, including when the answer is "drain it".
+
+Respond with ONLY a JSON object (no markdown fences, no prose) matching exactly this shape:
+{"summary":"","soak_ready":"yes|after_steps|no","soak_ready_note":"","flags":[],"leave_alone":[],
+ "steps":[{"order":1,"action":"","product_id":null,"amount":0,"unit":"cup|tsp|tablet|none","jets":"high|low|off","lid":"open|closed|n/a","wait_minutes":0,"retest_after":false,"retest_focus":[],"conditional":null,"why":""}],
+ "going_forward":null,
+ "followups":[{"type":"retest|shock|treatment","due_in_hours":4,"estimated_minutes":10,"note":""}]}`;
+}
+function buildUserContent(session){
+  const s=state.settings, strip=activeStrip();
+  const readings = session.readings.map(r=>`${r.name}: ${r.value}${r.unit?(' '+r.unit):''}`).join('; ');
+  const lt = lastTest();
+  const recent = sortedTests().slice(0,5).map(t=>{
+    const rd=(t.readings||[]).map(r=>`${r.name} ${r.value}`).join(', ');
+    const did=(t.completedSteps||[]).filter(x=>x.status==='done').map(x=>`${x.action}${x.amount?(' '+x.amount+(x.unit||'')):''}`).join('; ') || 'nothing recorded';
+    return `• ${fmtDate(t.timestamp)} — readings: ${rd}. Did: ${did}.${t.retest?(' Retest: '+(t.retest.readings||[]).map(r=>r.name+' '+r.value).join(', ')):''}`;
+  }).join('\n') || 'none';
+  const ltreat=lastTreatment();
+  const since = soaksSince(ltreat?ltreat.timestamp:null);
+  const people = since.reduce((a,x)=>a+(+x.people||0),0);
+  const minutes = since.reduce((a,x)=>a+(+x.durationMin||0),0);
+  const drain=lastDrain();
+  const prods = activeProducts().filter(p=>!p.stripProfile).map(p=>`- ${p.category}: ${p.brand} ${p.name}${p.activeIngredient?(' ('+p.activeIngredient+')'):''}${p.doseConverted?(' — dose: '+p.doseConverted):''}`).join('\n');
+  return `Current readings (in strip order${strip?', '+strip.name:''}), taken ${fmtDate(session.timestamp)}:
+${readings}
+Time since last test: ${lt?agoText(lt.timestamp):'n/a (first test)'}.
+
+Last ~5 sessions:
+${recent}
+
+Soaks since last treatment: ${since.length} soak(s), ${people} total people, ${minutes} total minutes. Most recent soak: ${lastSoak()?agoText(lastSoak().datetime):'none logged'}.
+Water age: ${drain?daysSince(drain.date)+' days since refill':'unknown (no refill logged)'}.
+Last filter rinse: ${lastMaint('filter-rinse')?agoText(lastMaint('filter-rinse').date):'none logged'}. Last filter replacement: ${lastMaint('filter-replace')?agoText(lastMaint('filter-replace').date):'none logged'}. Last enzyme dose: ${lastMaint('enzyme')?agoText(lastMaint('enzyme').date):'none logged'}.
+
+Active products (pre-converted for ${s.tub.gallons} gal):
+${prods}
+
+My notes: ${session.notes||'(none)'}${session.planToSoak&&session.planToSoak.planning?`\nPlanning to soak: ${session.planToSoak.when||'soon'}, ${session.planToSoak.people||'?'} people.`:''}
+
+What treatments should I administer and in which order?`;
+}
+function extractJson(text){
+  let t=text.trim();
+  const fence=t.match(/```(?:json)?\s*([\s\S]*?)```/); if(fence) t=fence[1].trim();
+  const a=t.indexOf('{'), b=t.lastIndexOf('}'); if(a>=0&&b>a) t=t.slice(a,b+1);
+  return JSON.parse(t);
+}
+function validatePlan(p){
+  return p && typeof p.summary==='string' && Array.isArray(p.steps) && typeof p.soak_ready==='string';
+}
+async function callClaude(messages, extraSystem){
+  const key=(state.settings.apiKey||'').trim();
+  if(!key) throw new Error('NO_KEY');
+  const res = await fetch(CONFIG.CLAUDE_API, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'x-api-key':key, 'anthropic-version':CONFIG.ANTHROPIC_VERSION, 'anthropic-dangerous-direct-browser-access':'true' },
+    body: JSON.stringify({ model:CONFIG.CLAUDE_MODEL, max_tokens:2048, system:(extraSystem||buildSystemPrompt()), messages })
+  });
+  if(!res.ok){ const t=await res.text(); throw new Error('Claude '+res.status+': '+t.slice(0,300)); }
+  const data=await res.json();
+  return (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+}
+async function generatePlan(session, priorMessages){
+  const messages = priorMessages || [{ role:'user', content: buildUserContent(session) }];
+  let raw = await callClaude(messages);
+  try{ const p=extractJson(raw); if(validatePlan(p)) return { plan:p, messages:[...messages,{role:'assistant',content:raw}] }; }catch(e){}
+  // retry once
+  const retryMsgs=[...messages,{role:'assistant',content:raw},{role:'user',content:'That was not valid. Respond with ONLY the JSON object described, nothing else.'}];
+  raw = await callClaude(retryMsgs);
+  try{ const p=extractJson(raw); if(validatePlan(p)) return { plan:p, messages:[...retryMsgs,{role:'assistant',content:raw}] }; }catch(e){}
+  return { raw, messages:[...retryMsgs,{role:'assistant',content:raw}] };
+}
+
+/* ============================================================
+   READING EVALUATION (color coding vs targets)
+   ============================================================ */
+function evalReading(name, value){
+  const n=name.toLowerCase(); const v=parseFloat(String(value).split('–')[0]);
+  const t=state.settings.targets; let band=null;
+  if(n.includes('alkalin')) band=t.alkalinity; else if(n==='ph'||n.includes('ph')) band=t.ph;
+  else if(n.includes('hard')) band=t.hardness; else if(n.includes('bromine')) band=t.bromine;
+  if(!band || isNaN(v)) return 'neutral';
+  if(v<band.min || v>band.max) return (v<band.min*0.5||v>band.max*1.5)?'bad':'warn';
+  return 'good';
+}
+
+/* ============================================================
+   ROUTER / VIEWS
+   ============================================================ */
+let route='dashboard';
+const views={};
+function go(r, arg){ route=r; arg&&(go._arg=arg); render(); document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.route===r)); window.scrollTo(0,0); }
+function render(){ const v=$('#view'); v.innerHTML=''; (views[route]||views.dashboard)(v, go._arg); go._arg=null; }
+
+/* ---------- DASHBOARD ---------- */
+views.dashboard = (v) => {
+  const lt=lastTest(), ls=lastSoak(), ltr=lastTreatment(), drain=lastDrain();
+  const since = soaksSince(ltr?ltr.timestamp:null);
+
+  // status
+  let status={cls:'good', text:'Looks good'};
+  if(lt){
+    const br=(lt.readings.find(r=>/bromine/i.test(r.name))||{}).value;
+    const brv=parseFloat(String(br));
+    if(since.length) status={cls:'warn', text:`Treatment due — ${since.length} soak(s) since last treatment`};
+    else if(!isNaN(brv) && brv<3) status={cls:'bad', text:'Bromine low — not soak-ready'};
+    else if(!isNaN(brv) && brv>5) status={cls:'warn', text:'Bromine high — let it come down'};
+    else status={cls:'good', text:'Soak-ready'};
+  } else status={cls:'neutral', text:'No test logged yet'};
+
+  v.appendChild(el('div',{class:'card tight'},[
+    el('div',{class:'row between'},[ el('h2',{},'Water status'), el('span',{class:'pill '+status.cls}, status.text) ]),
+    lt? el('small',{}, 'From last test '+agoText(lt.timestamp)) : el('small',{},'Run a test to get a plan')
+  ]));
+
+  if(since.length){
+    const ppl=since.reduce((a,x)=>a+(+x.people||0),0);
+    v.appendChild(el('div',{class:'banner due'},[ el('span',{},'♨️'),
+      el('span',{html:`Treatment due — soak ${agoText(ls.datetime)} (${ppl} ${ppl===1?'person':'people'} since last treatment). <a href="#" onclick="go('test');return false">Run a test →</a>`}) ]));
+  }
+
+  // last test readings
+  if(lt){
+    const card=el('div',{class:'card', onclick:()=>go('session', lt.id)},[ el('div',{class:'row between'},[el('h3',{},'Last test'), el('small',{},agoText(lt.timestamp))]) ]);
+    const chips=el('div',{class:'chips', style:'margin-top:8px'});
+    lt.readings.forEach(r=> chips.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value)}, `${r.name.split(' ').pop()}: ${r.value}`)) );
+    card.appendChild(chips); v.appendChild(card);
+  }
+
+  v.appendChild(el('div',{class:'card'},[
+    el('h3',{},'At a glance'),
+    kv('Last treatment', ltr? `${agoText(ltr.timestamp)} — ${(ltr.completedSteps||[]).filter(s=>s.status==='done'&&s.action).map(s=>s.action).join(', ')||'logged'}` : 'none'),
+    kv('Last soak', ls? `${agoText(ls.datetime)} — ${ls.durationMin||'?'} min, ${ls.people||'?'} ${(+ls.people===1)?'person':'people'}` : 'none'),
+    kv('Water age', drain? `${daysSince(drain.date)} days since refill` : 'unknown'),
+    kv('Next drain/refill', drain? inDays(state.settings.maintenanceIntervals.drainDays - daysSince(drain.date)) : 'log a refill to track')
+  ]));
+
+  // upcoming
+  const up=upcomingItems();
+  v.appendChild(el('div',{class:'card'},[ el('h3',{},'Upcoming'),
+    up.length? el('div',{}, up.map(u=>kv(u.label, u.when))) : el('small',{},'Nothing scheduled') ]));
+
+  v.appendChild(el('div',{class:'grid2'},[
+    el('button',{class:'btn big', onclick:()=>go('test')},'🧪 Test'),
+    el('button',{class:'btn big sub', onclick:()=>go('soak')},'♨️ Log Soak')
+  ]));
+};
+function kv(k,val){ return el('div',{class:'kv'},[ el('span',{class:'muted'},k), el('b',{}, String(val)) ]); }
+function inDays(n){ if(n==null) return '—'; if(n<=0) return 'now / overdue'; return `in ${n} day${n===1?'':'s'}`; }
+function upcomingItems(){
+  const out=[]; const mi=state.settings.maintenanceIntervals; const drain=lastDrain();
+  const enz=lastMaint('enzyme'); out.push({label:'Enzyme dose', when: enz?inDays(mi.enzymeDays-daysSince(enz.date)):'due (none logged)'});
+  if(drain) out.push({label:'Drain / refill', when: inDays(mi.drainDays-daysSince(drain.date))});
+  const fr=lastMaint('filter-rinse'); out.push({label:'Filter rinse', when: fr?inDays(mi.filterRinseDays-daysSince(fr.date)):'due (none logged)'});
+  // pending retest followups from latest session
+  const lt=lastTest();
+  if(lt && lt.plan && Array.isArray(lt.plan.followups)){
+    lt.plan.followups.forEach(f=> out.push({label:(f.type||'follow-up')+(f.note?(' — '+f.note):''), when:(f.due_in_hours?('~'+f.due_in_hours+'h after plan'):'soon')}) );
+  }
+  return out;
+}
+
+/* ---------- TEST ENTRY ---------- */
+views.test = (v) => {
+  const strip=activeStrip();
+  if(!strip){ v.appendChild(emptyState('No test strip profile yet','Add a test-strip product in Products to build the test form.')); return; }
+  const session = { id:uid(), timestamp:nowISO(), stripProfileId:strip.id, readings:[], notes:'', planToSoak:{planning:false} };
+
+  v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'🔆 <b>Before testing:</b> run jets on high 15–20 min, read at 30 seconds, in good light.'}) ]));
+
+  const form=el('div',{class:'card stack'});
+  strip.stripProfile.pads.forEach((pad,i)=>{
+    session.readings.push({ name:pad.name, unit:pad.unit, value:null });
+    const chips=el('div',{class:'chips'});
+    const selected={idx:[]};
+    pad.chart.forEach((val,ci)=>{
+      const chip=el('button',{class:'chip', type:'button'}, String(val));
+      chip.addEventListener('click', ()=>{
+        // tap once = value; tap a second chip = range "a–b"
+        if(selected.idx.length===1 && selected.idx[0]!==ci){
+          selected.idx.push(ci); selected.idx.sort((a,b)=>a-b);
+          const a=pad.chart[selected.idx[0]], b=pad.chart[selected.idx[1]];
+          session.readings[i].value = a+'–'+b;
+        } else {
+          selected.idx=[ci]; session.readings[i].value = String(val);
+        }
+        [...chips.children].forEach((c,ci2)=> c.classList.toggle('on', selected.idx.includes(ci2)));
+        [...chips.children].forEach((c,ci2)=> c.classList.toggle('range', selected.idx.length===2 && selected.idx.includes(ci2)));
+      });
+      chips.appendChild(chip);
+    });
+    form.appendChild(el('div',{},[ el('label',{class:'fld'}, pad.name+(pad.unit?(' ('+pad.unit+')'):'')), chips ]));
+  });
+  v.appendChild(form);
+
+  const notes=el('textarea',{placeholder:'Notes (optional)'});
+  const planChk=el('input',{type:'checkbox'});
+  const planWhen=el('input',{type:'text', placeholder:'When? e.g. tonight', class:'hidden'});
+  const planPeople=el('input',{type:'number', placeholder:'How many people?', class:'hidden', min:'1'});
+  planChk.addEventListener('change',()=>{ planWhen.classList.toggle('hidden',!planChk.checked); planPeople.classList.toggle('hidden',!planChk.checked); });
+  v.appendChild(el('div',{class:'card stack'},[
+    el('div',{},[ el('label',{class:'fld'},'Notes'), notes ]),
+    el('label',{class:'row', style:'gap:8px'},[ planChk, el('span',{},'Planning to soak?') ]),
+    planWhen, planPeople
+  ]));
+
+  const err=el('div',{class:'err hidden'});
+  const btn=el('button',{class:'btn'},'Get treatment plan');
+  btn.addEventListener('click', async ()=>{
+    if(session.readings.every(r=>r.value==null)){ err.textContent='Enter at least one reading.'; err.classList.remove('hidden'); return; }
+    session.readings = session.readings.filter(r=>r.value!=null);
+    session.notes = notes.value.trim();
+    session.planToSoak = { planning:planChk.checked, when:planWhen.value.trim(), people:planPeople.value };
+    if(!(state.settings.apiKey||'').trim()){ err.innerHTML='No Anthropic API key set. Add it in <a href="#" onclick="go(\'settings\');return false">Settings</a>.'; err.classList.remove('hidden'); return; }
+    btn.disabled=true; btn.innerHTML='<span class="spin"></span> Generating plan…'; err.classList.add('hidden');
+    try{
+      const result = await generatePlan(session);
+      session.plan = result.plan || null;
+      session.rawPlan = result.raw || null;
+      session.conversation = result.messages;
+      session.completedSteps = [];
+      state.tests.items.push(session); queueSave('tests');
+      go('session', session.id);
+    }catch(e){
+      btn.disabled=false; btn.innerHTML='Get treatment plan';
+      err.textContent = e.message==='NO_KEY' ? 'No API key set.' : ('Plan failed: '+e.message); err.classList.remove('hidden');
+    }
+  });
+  v.appendChild(btn);
+};
+
+/* ---------- SESSION / INTERACTIVE CHECKLIST ---------- */
+views.session = (v, id) => {
+  const t = state.tests.items.find(x=>x.id===id) || lastTest();
+  if(!t){ v.appendChild(emptyState('Session not found','')); return; }
+  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('dashboard'), style:'margin-bottom:10px'},'← Home'));
+
+  // readings summary
+  const rc=el('div',{class:'card tight'});
+  rc.appendChild(el('div',{class:'row between'},[el('h3',{},'Readings'), el('small',{},fmtDate(t.timestamp))]));
+  const rch=el('div',{class:'chips', style:'margin-top:8px'});
+  (t.readings||[]).forEach(r=> rch.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value)}, `${r.name}: ${r.value}`)) );
+  rc.appendChild(rch); v.appendChild(rc);
+
+  if(!t.plan){
+    v.appendChild(el('div',{class:'card'},[ el('h3',{},'Plan (raw)'), el('small',{},'Could not parse structured JSON — showing raw text.'), el('pre',{class:'raw'}, t.rawPlan||'(none)') ]));
+    return;
+  }
+  const p=t.plan;
+  // summary / priority
+  const sc=el('div',{class:'card'});
+  sc.appendChild(el('div',{class:'row between'},[ el('h3',{},'Priority'),
+    el('span',{class:'pill '+(p.soak_ready==='yes'?'good':p.soak_ready==='no'?'bad':'warn')}, p.soak_ready==='yes'?'Soak-ready':p.soak_ready==='no'?'Not today':'After steps') ]));
+  sc.appendChild(el('p',{style:'margin:8px 0 0'}, p.summary||''));
+  if(p.soak_ready_note) sc.appendChild(el('small',{html:'🛁 '+p.soak_ready_note}));
+  if(p.flags&&p.flags.length){ sc.appendChild(el('div',{class:'err', style:'margin-top:10px'},[ el('b',{},'⚠ Flags: '), el('ul',{class:'flaglist', style:'margin:4px 0 0 18px'}, p.flags.map(f=>el('li',{},f))) ])); }
+  if(p.leave_alone&&p.leave_alone.length) sc.appendChild(el('small',{html:'✅ Leave alone: '+p.leave_alone.join(', ')}));
+  v.appendChild(sc);
+
+  // steps checklist
+  t.completedSteps = t.completedSteps || [];
+  const stepsWrap=el('div',{});
+  const firstPending = (p.steps||[]).findIndex(s=> !t.completedSteps.find(c=>c.order===s.order));
+  (p.steps||[]).forEach((s,i)=>{
+    const rec = t.completedSteps.find(c=>c.order===s.order);
+    const done = !!rec;
+    const node=el('div',{class:'step'+(done?' done':(i===firstPending?' active':''))});
+    node.appendChild(el('div',{class:'row', style:'align-items:flex-start'},[
+      el('span',{class:'num'}, String(s.order)),
+      el('div',{style:'flex:1'},[
+        el('b',{}, s.action + (s.amount&&s.unit&&s.unit!=='none' ? ` — ${rec&&rec.amount!=null?rec.amount:s.amount} ${s.unit}` : '')),
+        el('div',{class:'hint'}, [s.jets&&s.jets!=='off'?('jets '+s.jets):'jets off', s.lid&&s.lid!=='n/a'?('lid '+s.lid):null, s.wait_minutes?('circulate '+s.wait_minutes+' min'):null].filter(Boolean).join(' · ')),
+        s.conditional? el('div',{class:'hint'},'Only if: '+s.conditional):null,
+        el('div',{class:'why'}, s.why||'')
+      ])
+    ]));
+    if(done){
+      node.appendChild(el('small',{style:'display:block;margin-top:8px'}, rec.status==='skipped'?('Skipped: '+(rec.reason||'')):('Done'+(rec.amount!=null&&rec.amount!==s.amount?(' (amount '+rec.amount+')'):''))));
+    } else {
+      const ctr=el('div',{class:'row', style:'margin-top:10px;gap:8px;flex-wrap:wrap'});
+      ctr.appendChild(el('button',{class:'btn sm', onclick:()=>{ t.completedSteps.push({order:s.order, action:s.action, amount:s.amount, unit:s.unit, status:'done'}); queueSave('tests'); go('session',t.id); }},'✓ Done'));
+      if(s.amount && s.unit && s.unit!=='none'){
+        ctr.appendChild(el('button',{class:'btn sm sub', onclick:()=>{
+          const val=prompt('Amount you actually used ('+s.unit+'):', s.amount); if(val==null) return;
+          t.completedSteps.push({order:s.order, action:s.action, amount:parseFloat(val), unit:s.unit, status:'done'}); queueSave('tests'); go('session',t.id);
+        }},'Edit amount'));
+      }
+      ctr.appendChild(el('button',{class:'btn sm sub', onclick:()=>{
+        const reason=prompt('Skip reason:','') ; if(reason==null) return;
+        t.completedSteps.push({order:s.order, action:s.action, status:'skipped', reason}); queueSave('tests'); go('session',t.id);
+      }},'Skip'));
+      node.appendChild(ctr);
+
+      if(s.wait_minutes){ node.appendChild(timerNode(t, s)); }
+      if(s.retest_after){ node.appendChild(el('button',{class:'btn sm ghost', style:'margin-top:10px', onclick:()=> retestFlow(t, s)},'↻ Retest now'+(s.retest_focus&&s.retest_focus.length?(' ('+s.retest_focus.join(', ')+')'):''))); }
+    }
+    stepsWrap.appendChild(node);
+  });
+  v.appendChild(el('div',{class:'card'},[ el('h3',{},'Steps'), stepsWrap ]));
+
+  if(p.going_forward) v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'📌 <b>Going forward:</b> '+p.going_forward}) ]));
+
+  if(t.retest){
+    v.appendChild(el('div',{class:'card'},[ el('h3',{},'Retest'), el('div',{class:'chips'}, (t.retest.readings||[]).map(r=>el('span',{class:'pill '+evalReading(r.name,r.value)}, r.name+': '+r.value))),
+      t.retest.plan? el('p',{style:'margin-top:8px'}, t.retest.plan.summary) : (t.retest.raw?el('pre',{class:'raw'},t.retest.raw):null) ]));
+  }
+
+  const allHandled = (p.steps||[]).length && (p.steps||[]).every(s=> t.completedSteps.find(c=>c.order===s.order));
+  v.appendChild(el('button',{class:'btn '+(allHandled?'':'sub'), onclick:()=>{ toast('Session saved'); go('dashboard'); }}, allHandled?'Finish & save session':'Save for later'));
+};
+
+function timerNode(t, s){
+  const key='t_'+t.id+'_'+s.order;
+  const wrap=el('div',{class:'card tight', style:'margin-top:10px;background:var(--bg)'});
+  const end = t['timerEnd_'+s.order];
+  const line=el('div',{class:'row between'});
+  const disp=el('span',{class:'timer'},'');
+  line.appendChild(disp);
+  if(!end){
+    const start=el('button',{class:'btn sm', onclick:()=>{ t['timerEnd_'+s.order]=Date.now()+s.wait_minutes*60000; queueSave('tests'); go('session',t.id); }}, 'Start '+s.wait_minutes+' min timer');
+    line.appendChild(start);
+  } else {
+    line.appendChild(el('button',{class:'btn sm sub', onclick:()=>{ delete t['timerEnd_'+s.order]; queueSave('tests'); go('session',t.id); }},'Reset'));
+  }
+  wrap.appendChild(line);
+  if(end){
+    const tick=()=>{ const ms=end-Date.now(); if(ms<=0){ disp.textContent='Done — ready to continue'; disp.style.color='var(--good)'; return; }
+      const m=Math.floor(ms/60000), ss=Math.floor((ms%60000)/1000); disp.textContent=`${m}:${String(ss).padStart(2,'0')}`; requestAnimationFrame?setTimeout(tick,1000):0; };
+    tick();
+  } else disp.textContent=s.wait_minutes+':00';
+  return wrap;
+}
+
+async function retestFlow(t, step){
+  // Minimal in-place retest: collect fresh readings via the strip, send back to Claude with plan-so-far.
+  const strip=activeStrip();
+  const v=$('#view'); v.innerHTML='';
+  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('session',t.id), style:'margin-bottom:10px'},'← Back to plan'));
+  v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'↻ <b>Retest</b> — enter current readings; Claude will adjust the remaining steps.'}) ]));
+  const readings = strip.stripProfile.pads.map(p=>({name:p.name,unit:p.unit,value:null}));
+  const form=el('div',{class:'card stack'});
+  strip.stripProfile.pads.forEach((pad,i)=>{
+    const chips=el('div',{class:'chips'});
+    pad.chart.forEach(val=>{ const c=el('button',{class:'chip',type:'button'},String(val)); c.addEventListener('click',()=>{ readings[i].value=String(val); [...chips.children].forEach(x=>x.classList.remove('on')); c.classList.add('on'); }); chips.appendChild(c); });
+    form.appendChild(el('div',{},[ el('label',{class:'fld'}, pad.name), chips ]));
+  });
+  v.appendChild(form);
+  const err=el('div',{class:'err hidden'});
+  v.appendChild(err);
+  v.appendChild(el('button',{class:'btn', onclick:async(e)=>{
+    const got=readings.filter(r=>r.value!=null); if(!got.length){ err.textContent='Enter at least one reading.'; err.classList.remove('hidden'); return; }
+    e.target.disabled=true; e.target.innerHTML='<span class="spin"></span> Updating plan…';
+    try{
+      const did=(t.completedSteps||[]).map(c=>`${c.status==='done'?'did':'skipped'} step ${c.order} (${c.action})`).join('; ')||'none yet';
+      const msg = `Retest after circulating. New readings: ${got.map(r=>r.name+' '+r.value).join(', ')}. Steps completed so far: ${did}. Adjust the remaining steps or add passes. Respond with ONLY the same JSON object shape.`;
+      const convo=[...(t.conversation||[{role:'user',content:buildUserContent(t)}]), {role:'user',content:msg}];
+      const result = await generatePlan(t, convo);
+      t.retest = { timestamp:nowISO(), readings:got, plan:result.plan||null, raw:result.raw||null };
+      if(result.messages) t.conversation=result.messages;
+      queueSave('tests'); go('session',t.id);
+    }catch(err2){ e.target.disabled=false; e.target.innerHTML='Update plan'; const er=$('.err'); er.textContent='Retest failed: '+err2.message; er.classList.remove('hidden'); }
+  }},'Submit retest'));
+}
+
+/* ---------- SOAK LOG ---------- */
+views.soak = (v) => {
+  const dt=el('input',{type:'datetime-local'}); dt.value=localInput(new Date());
+  const dur=el('input',{type:'number', placeholder:'minutes', min:'1'});
+  const ppl=el('input',{type:'number', placeholder:'people', min:'1', value:'1'});
+  const notes=el('input',{type:'text', placeholder:'notes (optional)'});
+  v.appendChild(el('div',{class:'card stack'},[
+    el('h2',{},'Log a soak'),
+    el('div',{},[ el('label',{class:'fld'},'When'), dt ]),
+    el('div',{class:'grid2'},[ el('div',{},[el('label',{class:'fld'},'Duration'),dur]), el('div',{},[el('label',{class:'fld'},'People'),ppl]) ]),
+    el('div',{},[ el('label',{class:'fld'},'Notes'), notes ]),
+    el('button',{class:'btn', onclick:()=>{
+      const s={ id:uid(), datetime:new Date(dt.value||Date.now()).toISOString(), durationMin:+dur.value||null, people:+ppl.value||null, notes:notes.value.trim() };
+      state.soaks.items.push(s); queueSave('soaks'); toast('Soak logged — treatment due'); go('dashboard');
+    }},'Save soak')
+  ]));
+  const list=sortedSoaks();
+  const card=el('div',{class:'card'},[ el('h3',{},'Recent soaks') ]);
+  if(!list.length) card.appendChild(emptyState('No soaks logged yet',''));
+  list.slice(0,15).forEach(s=>{
+    const followed = state.tests.items.some(t=> new Date(t.timestamp) > new Date(s.datetime));
+    card.appendChild(el('div',{class:'listrow'},[
+      el('div',{},[ el('b',{}, fmtDate(s.datetime)), el('div',{class:'hint'}, `${s.durationMin||'?'} min · ${s.people||'?'} ${(+s.people===1)?'person':'people'}`+(s.notes?(' · '+s.notes):'')) ]),
+      el('span',{class:'pill '+(followed?'good':'warn')}, followed?'treated after':'no treatment')
+    ]));
+  });
+  v.appendChild(card);
+};
+function localInput(d){ const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; }
+
+/* ---------- TREATMENT LOG ---------- */
+views.log = (v) => {
+  const list=sortedTests();
+  const card=el('div',{class:'card'},[ el('h2',{},'Treatment log') ]);
+  if(!list.length){ card.appendChild(emptyState('No test sessions yet','Run a test to generate your first plan.')); v.appendChild(card); return; }
+  list.forEach(t=>{
+    const steps=(t.completedSteps||[]).filter(s=>s.status==='done').length;
+    const chips=el('div',{class:'chips', style:'margin-top:6px'});
+    (t.readings||[]).slice(0,7).forEach(r=> chips.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value)}, r.value)) );
+    card.appendChild(el('div',{class:'listrow', style:'cursor:pointer', onclick:()=>go('session',t.id)},[
+      el('div',{style:'flex:1'},[ el('b',{}, fmtDate(t.timestamp)), chips ]),
+      el('small',{}, steps+' step'+(steps===1?'':'s')+' ✓')
+    ]));
+  });
+  v.appendChild(card);
+};
+
+/* ---------- MORE MENU ---------- */
+views.more = (v) => {
+  v.appendChild(el('div',{class:'card'},[ el('h2',{},'More'),
+    menuItem('🧴 Products','Manage test strips, chemicals',()=>go('products')),
+    menuItem('📖 Rules','Edit the chemistry knowledge base',()=>go('rules')),
+    menuItem('⚙️ Settings','Profile, targets, API key, backup',()=>go('settings')),
+    menuItem('🧰 Maintenance','Filter, drain/refill, repairs (Phase 2)',()=>toast('Maintenance log lands in Phase 2'))
+  ]));
+};
+function menuItem(title, sub, fn){ return el('div',{class:'listrow', style:'cursor:pointer', onclick:fn},[ el('div',{},[ el('b',{},title), el('div',{class:'hint'},sub) ]), el('span',{class:'muted'},'›') ]); }
+
+/* ---------- PRODUCTS ---------- */
+views.products = (v) => {
+  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('more'), style:'margin-bottom:10px'},'← More'));
+  state.products.categories.forEach(cat=>{
+    const items=state.products.items.filter(p=>p.category===cat);
+    const card=el('div',{class:'card'},[ el('h3',{},cat) ]);
+    if(!items.length) card.appendChild(el('small',{},'None yet'));
+    items.forEach(p=>{
+      card.appendChild(el('div',{class:'listrow'},[
+        el('div',{style:'flex:1'},[ el('b',{}, (p.brand?p.brand+' ':'')+p.name), el('div',{class:'hint'}, [p.activeIngredient, p.doseConverted].filter(Boolean).join(' · ')+(p.stripProfile?(' · '+p.stripProfile.pads.length+' pads'):'')) ]),
+        el('span',{class:'pill '+(p.active&&!p.archived?'good':'neutral')}, p.archived?'archived':(p.active?'active':'off'))
+      ]));
+    });
+    v.appendChild(card);
+  });
+  v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'📷 Label-photo extraction (auto-filling dose & strip profiles) arrives in Phase 2. For now, seeded products are editable here in a later build.'}) ]));
+};
+
+/* ---------- RULES EDITOR ---------- */
+views.rules = (v) => {
+  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('more'), style:'margin-bottom:10px'},'← More'));
+  const ta=el('textarea',{style:'min-height:60vh'}); ta.value=state.rules;
+  v.appendChild(el('div',{class:'card'},[ el('h2',{},'Chemistry rules'),
+    el('small',{},'Sent as the system prompt on every treatment request. New learnings go here, not into code.'),
+    ta,
+    el('button',{class:'btn', style:'margin-top:10px', onclick:()=>{ state.rules=ta.value; queueSave('rules'); toast('Rules saved'); }},'Save rules') ]));
+};
+
+/* ---------- SETTINGS ---------- */
+views.settings = (v) => {
+  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('more'), style:'margin-bottom:10px'},'← More'));
+  const s=state.settings;
+
+  // API key
+  const keyInput=el('input',{type:'password', placeholder:'sk-ant-…', value:s.apiKey||''});
+  v.appendChild(el('div',{class:'card stack'},[ el('h3',{},'Anthropic API key'),
+    el('small',{},'Stored only in your OneDrive settings.json — never in the app code or repo. Synced across your devices.'),
+    keyInput,
+    el('button',{class:'btn sm', onclick:()=>{ s.apiKey=keyInput.value.trim(); queueSave('settings'); toast('API key saved'); }},'Save key') ]));
+
+  // targets
+  const tgt=s.targets;
+  const num=(v2)=>el('input',{type:'number', value:v2, step:'0.1'});
+  const alkMin=num(tgt.alkalinity.min), alkMax=num(tgt.alkalinity.max), alkT=num(tgt.alkalinity.target);
+  const phMin=num(tgt.ph.min), phMax=num(tgt.ph.max);
+  const hMin=num(tgt.hardness.min), hMax=num(tgt.hardness.max), hT=num(tgt.hardness.target);
+  const brMin=num(tgt.bromine.min), brMax=num(tgt.bromine.max);
+  v.appendChild(el('div',{class:'card stack'},[ el('h3',{},'Targets'),
+    labeled('Alkalinity target / min / max', el('div',{class:'row'},[alkT,alkMin,alkMax])),
+    labeled('pH min / max', el('div',{class:'row'},[phMin,phMax])),
+    labeled('Hardness target / min / max', el('div',{class:'row'},[hT,hMin,hMax])),
+    labeled('Bromine min / max', el('div',{class:'row'},[brMin,brMax])),
+    el('button',{class:'btn sm', onclick:()=>{
+      tgt.alkalinity={...tgt.alkalinity, target:+alkT.value, min:+alkMin.value, max:+alkMax.value};
+      tgt.ph={...tgt.ph, min:+phMin.value, max:+phMax.value};
+      tgt.hardness={...tgt.hardness, target:+hT.value, min:+hMin.value, max:+hMax.value};
+      tgt.bromine={...tgt.bromine, min:+brMin.value, max:+brMax.value};
+      queueSave('settings'); toast('Targets saved');
+    }},'Save targets') ]));
+
+  // intervals
+  const mi=s.maintenanceIntervals;
+  const enz=num(mi.enzymeDays), drn=num(mi.drainDays), frn=num(mi.filterRinseDays), frp=num(mi.filterReplaceDays);
+  v.appendChild(el('div',{class:'card stack'},[ el('h3',{},'Maintenance intervals (days)'),
+    labeled('Enzyme', enz), labeled('Drain / refill', drn), labeled('Filter rinse', frn), labeled('Filter replacement', frp),
+    el('button',{class:'btn sm', onclick:()=>{ s.maintenanceIntervals={enzymeDays:+enz.value,drainDays:+drn.value,filterRinseDays:+frn.value,filterReplaceDays:+frp.value}; queueSave('settings'); toast('Intervals saved'); }},'Save intervals') ]));
+
+  // scheduling windows (Phase 2 use)
+  const w=s.schedulingWindows;
+  const wd=el('input',{type:'time', value:w.weekdayStartTime}), ws=el('input',{type:'time', value:w.weekendStart}), we=el('input',{type:'time', value:w.weekendEnd});
+  v.appendChild(el('div',{class:'card stack'},[ el('h3',{},'Scheduling windows'), el('small',{},'Used by calendar scheduling in Phase 2.'),
+    labeled('Weekday start (≥)', wd), labeled('Weekend start', ws), labeled('Weekend end', we),
+    el('button',{class:'btn sm', onclick:()=>{ s.schedulingWindows={weekdayStartTime:wd.value,weekendStart:ws.value,weekendEnd:we.value}; queueSave('settings'); toast('Windows saved'); }},'Save windows') ]));
+
+  // backup + sign out
+  v.appendChild(el('div',{class:'card stack'},[ el('h3',{},'Data'),
+    el('button',{class:'btn sm sub', onclick:exportBackup},'⬇ Export / backup JSON'),
+    el('button',{class:'btn sm danger', onclick:()=>{ if(confirm('Sign out?')){ signOut(); location.reload(); } }},'Sign out') ]));
+
+  v.appendChild(el('div',{class:'card tight'},[ el('small',{html:`Tub: ${s.tub.model}, ${s.tub.persons}-person, ~${s.tub.gallons} gal · ${s.tub.sanitizer}. Data: <code>${CONFIG.BASE_PATH}</code>`}) ]));
+};
+function labeled(lbl, node){ return el('div',{},[ el('label',{class:'fld'},lbl), node ]); }
+function exportBackup(){
+  const blob = { exportedAt:nowISO(), settings:state.settings, products:state.products, tests:state.tests, soaks:state.soaks, maintenance:state.maintenance, events:state.events, rules:state.rules };
+  const url=URL.createObjectURL(new Blob([JSON.stringify(blob,null,2)],{type:'application/json'}));
+  const a=el('a',{href:url, download:'tub-time-backup-'+new Date().toISOString().slice(0,10)+'.json'}); document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+}
+
+function emptyState(title, sub){ return el('div',{class:'empty'},[ el('img',{src:'duck.svg'}), el('div',{},[ el('b',{},title), sub?el('div',{class:'hint', style:'margin-top:4px'},sub):null ]) ]); }
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+document.querySelectorAll('nav.tabs button').forEach(b=> b.addEventListener('click', ()=>go(b.dataset.route)) );
+$('#moreBtn').addEventListener('click', ()=>go('more'));
+
+async function boot(){
+  if(CONFIG.MSAL_CLIENT_ID==='YOUR_ENTRA_CLIENT_ID'){
+    $('#gate').classList.remove('hidden');
+    $('#gateErr').textContent='Set CONFIG.MSAL_CLIENT_ID in index.html to your Tub Time Entra app registration (client) ID.';
+    $('#gateErr').classList.remove('hidden'); $('#signinBtn').disabled=true; return;
+  }
+  initMsal();
+  try{ await msalApp.initialize?.(); }catch(e){}
+  const signed = await restoreAccount();
+  if(signed){ msalApp.setActiveAccount(account); await enterApp(); }
+  else $('#gate').classList.remove('hidden');
+}
+$('#signinBtn').addEventListener('click', async ()=>{
+  const b=$('#signinBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span> Signing in…';
+  try{ await signIn(); $('#gate').classList.add('hidden'); await enterApp(); }
+  catch(e){ b.disabled=false; b.textContent='Sign in with Microsoft'; $('#gateErr').textContent='Sign-in failed: '+(e.message||e); $('#gateErr').classList.remove('hidden'); }
+});
+async function enterApp(){
+  $('#app').classList.remove('hidden');
+  const v=$('#view'); v.innerHTML='<div class="center" style="padding:40px"><span class="spin"></span> Loading your tub data…</div>';
+  try{ await loadAll(); flushQueue(); go('dashboard'); }
+  catch(e){ v.innerHTML=''; v.appendChild(el('div',{class:'err'},'Could not load data from OneDrive: '+(e.message||e))); console.error(e); }
+}
+
+if('serviceWorker' in navigator){ window.addEventListener('load', ()=> navigator.serviceWorker.register('service-worker.js').catch(()=>{})); }
+boot();
+</script>
+</body>
+</html>

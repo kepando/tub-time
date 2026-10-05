@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Tub Time rubber duck">
+  <!-- Original rubber-ducky mark for Tub Time. Flat, friendly, readable small. -->
+  <g>
+    <!-- tail -->
+    <path d="M70 298 C40 292 38 322 62 334 C76 341 92 333 98 320 Z" fill="#FFD43B"/>
+    <!-- body -->
+    <ellipse cx="236" cy="332" rx="182" ry="128" fill="#FFD43B"/>
+    <!-- belly shading -->
+    <path d="M78 356 C150 452 332 452 398 352 C356 436 120 440 78 356 Z" fill="#F4B400" opacity="0.55"/>
+    <!-- wing -->
+    <path d="M150 318 C206 300 286 308 302 346 C282 376 198 382 154 360 C136 348 134 330 150 318 Z" fill="#EFB400"/>
+    <!-- head -->
+    <circle cx="344" cy="196" r="98" fill="#FFD43B"/>
+    <!-- head highlight -->
+    <ellipse cx="302" cy="150" rx="40" ry="30" fill="#FFE57A" opacity="0.8"/>
+    <!-- beak -->
+    <path d="M418 176 C460 167 492 176 492 199 C492 222 456 226 418 217 Z" fill="#FF8A3D"/>
+    <path d="M424 201 C454 208 478 207 489 201" stroke="#E8690B" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <!-- eye -->
+    <circle cx="372" cy="172" r="16" fill="#2B2B2B"/>
+    <circle cx="378" cy="166" r="5" fill="#FFFFFF"/>
+  </g>
+</svg>
