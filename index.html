@@ -600,11 +600,6 @@ views.dashboard = (v) => {
   const up=upcomingItems();
   v.appendChild(el('div',{class:'card'},[ el('h3',{},'Upcoming'),
     up.length? el('div',{}, up.map(u=>kv(u.label, u.when))) : el('small',{},'Nothing scheduled') ]));
-
-  v.appendChild(el('div',{class:'grid2'},[
-    el('button',{class:'btn big', onclick:()=>go('test')},'🧪 Test'),
-    el('button',{class:'btn big sub', onclick:()=>go('soak')},'♨️ Log Soak')
-  ]));
 };
 function kv(k,val){ return el('div',{class:'kv'},[ el('span',{class:'muted'},k), el('b',{}, String(val)) ]); }
 function inDays(n){ if(n==null) return '—'; if(n<=0) return 'now / overdue'; return `in ${n} day${n===1?'':'s'}`; }
