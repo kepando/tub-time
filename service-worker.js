@@ -1,6 +1,6 @@
 // Tub Time service worker.
 // Network-first for the app shell (so updates land), cache-first for static assets.
-const CACHE = 'tubtime-v3';
+const CACHE = 'tubtime-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,7 @@ const ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png',
-  './apple-touch-icon-180.png',
+  './app-icon-180.png',
   './favicon-32.png'
 ];
 
