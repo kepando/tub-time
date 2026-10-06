@@ -9,7 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Tub Time">
 <title>Tub Time</title>
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
+<link rel="apple-touch-icon-precomposed" href="apple-touch-icon-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/svg+xml" href="duck.svg">
 <script src="https://alcdn.msftauth.net/browser/2.38.1/js/msal-browser.min.js"></script>
@@ -32,7 +33,8 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; line-height:1.4;}
+  background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased; line-height:1.4;
+  overscroll-behavior-y:contain;}
 button{font-family:inherit; cursor:pointer}
 a{color:var(--brand)}
 h1,h2,h3{margin:0 0 .4em}
@@ -40,21 +42,34 @@ h2{font-size:1.15rem} h3{font-size:1rem}
 small{color:var(--muted)}
 .hidden{display:none !important}
 
-header.app{position:sticky; top:0; z-index:20; background:var(--card); border-bottom:1px solid var(--line);
-  padding:calc(var(--safe-top) + 10px) 14px 10px; display:flex; align-items:center; gap:10px;}
+/* Solid header that fully covers the iOS status-bar strip (black-translucent). */
+header.app{position:sticky; top:0; z-index:30; background:var(--card); border-bottom:1px solid var(--line);
+  padding:calc(var(--safe-top) + 12px) 16px 12px; display:flex; align-items:center; gap:10px;
+  box-shadow:0 2px 12px rgba(0,0,0,.18);}
 header.app img{width:30px; height:30px}
 header.app .title{font-weight:700; font-size:1.1rem; letter-spacing:.2px}
 header.app .spacer{flex:1}
-.iconbtn{background:none; border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:7px 11px; font-size:.85rem}
 
-main{max-width:720px; margin:0 auto; padding:14px 14px 96px; min-height:60vh}
+main{max-width:720px; margin:0 auto; padding:14px 14px calc(var(--safe-bottom) + 108px); min-height:60vh}
 
-nav.tabs{position:fixed; bottom:0; left:0; right:0; z-index:20; background:var(--card); border-top:1px solid var(--line);
-  display:flex; padding-bottom:var(--safe-bottom);}
-nav.tabs button{flex:1; background:none; border:none; color:var(--muted); padding:9px 2px; font-size:.68rem;
-  display:flex; flex-direction:column; align-items:center; gap:3px}
-nav.tabs button .ic{font-size:1.25rem; line-height:1}
+/* Floating-pill bottom nav, offset above the home indicator. */
+nav.tabs{position:fixed; left:12px; right:12px; bottom:calc(var(--safe-bottom) + 12px); z-index:30;
+  max-width:500px; margin:0 auto; background:var(--card); border:1px solid var(--line); border-radius:22px;
+  display:flex; padding:8px 4px; box-shadow:0 10px 30px rgba(0,0,0,.32);}
+nav.tabs button{flex:1; background:none; border:none; color:var(--muted); padding:6px 2px; font-size:.66rem; font-weight:600;
+  display:flex; flex-direction:column; align-items:center; gap:4px}
+nav.tabs button svg{width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; display:block}
 nav.tabs button.active{color:var(--brand)}
+
+/* Pull-to-refresh indicator */
+#ptr{position:fixed; left:0; right:0; top:calc(var(--safe-top) + 58px); display:flex; justify-content:center; z-index:25; pointer-events:none; opacity:0; transition:opacity .15s}
+#ptr .ring{background:var(--card); border:1px solid var(--line); border-radius:999px; padding:7px 14px; box-shadow:var(--shadow); color:var(--muted); font-size:.82rem; font-weight:600}
+
+/* Swipe-to-delete rows */
+.swipe{position:relative; overflow:hidden; border-top:1px solid var(--line)}
+.swipe:first-child{border-top:none}
+.swipe .swipe-del{position:absolute; top:0; right:0; bottom:0; width:92px; border:none; background:var(--bad); color:#fff; font-weight:700; font-size:.95rem}
+.swipe .swipe-fg{position:relative; background:var(--card); transform:translateX(0); will-change:transform; touch-action:pan-y}
 
 .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; box-shadow:var(--shadow)}
 .card.tight{padding:12px 14px}
@@ -105,7 +120,7 @@ textarea{min-height:96px; resize:vertical}
 .why{font-size:.88rem; color:var(--muted); margin-top:6px}
 .timer{font-variant-numeric:tabular-nums; font-weight:700; font-size:1.3rem}
 
-.toast{position:fixed; left:50%; bottom:calc(var(--safe-bottom) + 74px); transform:translateX(-50%); background:var(--ink); color:var(--bg);
+.toast{position:fixed; left:50%; bottom:calc(var(--safe-bottom) + 92px); transform:translateX(-50%); background:var(--ink); color:var(--bg);
   padding:11px 16px; border-radius:12px; font-size:.9rem; z-index:50; max-width:90%; text-align:center; box-shadow:var(--shadow)}
 .center{text-align:center}
 .empty{text-align:center; color:var(--muted); padding:30px 10px}
@@ -139,15 +154,15 @@ pre.raw{white-space:pre-wrap; background:var(--bg); padding:12px; border-radius:
     <span class="title">Tub Time</span>
     <span class="spacer"></span>
     <span id="syncDot" class="syncdot" title="Saved"></span>
-    <button class="iconbtn" id="moreBtn">More</button>
   </header>
+  <div id="ptr"><div class="ring">Pull to refresh</div></div>
   <main id="view"></main>
   <nav class="tabs">
-    <button data-route="dashboard" class="active"><span class="ic">🏠</span>Home</button>
-    <button data-route="test"><span class="ic">🧪</span>Test</button>
-    <button data-route="soak"><span class="ic">♨️</span>Soak</button>
-    <button data-route="log"><span class="ic">📋</span>Log</button>
-    <button data-route="more"><span class="ic">⚙️</span>More</button>
+    <button data-route="dashboard" class="active"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg>Home</button>
+    <button data-route="test"><svg viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/><path d="M7.5 15h9"/></svg>Test</button>
+    <button data-route="soak"><svg viewBox="0 0 24 24"><path d="M8 4c-1 1.2-1 2.3 0 3.5S9 9.8 8 11"/><path d="M12 4c-1 1.2-1 2.3 0 3.5S13 9.8 12 11"/><path d="M16 4c-1 1.2-1 2.3 0 3.5S17 9.8 16 11"/><path d="M4 15h16v2a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z"/></svg>Soak</button>
+    <button data-route="log"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M9 10h6M9 14h6M9 18h4"/></svg>Log</button>
+    <button data-route="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>More</button>
   </nav>
 </div>
 
@@ -571,7 +586,7 @@ views.dashboard = (v) => {
 
   v.appendChild(el('div',{class:'card'},[
     el('h3',{},'At a glance'),
-    kv('Last treatment', ltr? `${agoText(ltr.timestamp)} — ${(ltr.completedSteps||[]).filter(s=>s.status==='done'&&s.action).map(s=>s.action).join(', ')||'logged'}` : 'none'),
+    kv('Last treatment', ltr? `${agoText(ltr.timestamp)} — ${trunc((ltr.completedSteps||[]).filter(s=>s.status==='done'&&s.action).map(s=>s.action.split(/[.:]/)[0].trim()).join(', '),70)||'logged'}` : 'none'),
     kv('Last soak', ls? `${agoText(ls.datetime)} — ${ls.durationMin||'?'} min, ${ls.people||'?'} ${(+ls.people===1)?'person':'people'}` : 'none'),
     kv('Water age', drain? `${daysSince(drain.date)} days since refill` : 'unknown'),
     kv('Next drain/refill', drain? inDays(state.settings.maintenanceIntervals.drainDays - daysSince(drain.date)) : 'log a refill to track')
@@ -823,12 +838,14 @@ views.soak = (v) => {
   const list=sortedSoaks();
   const card=el('div',{class:'card'},[ el('h3',{},'Recent soaks') ]);
   if(!list.length) card.appendChild(emptyState('No soaks logged yet',''));
+  if(list.length) card.appendChild(el('div',{class:'hint', style:'margin-top:4px'},'Swipe a row left to delete.'));
   list.slice(0,15).forEach(s=>{
     const followed = state.tests.items.some(t=> new Date(t.timestamp) > new Date(s.datetime));
-    card.appendChild(el('div',{class:'listrow'},[
+    const rowInner = el('div',{class:'listrow'},[
       el('div',{},[ el('b',{}, fmtDate(s.datetime)), el('div',{class:'hint'}, `${s.durationMin||'?'} min · ${s.people||'?'} ${(+s.people===1)?'person':'people'}`+(s.notes?(' · '+s.notes):'')) ]),
       el('span',{class:'pill '+(followed?'good':'warn')}, followed?'treated after':'no treatment')
-    ]));
+    ]);
+    card.appendChild(swipeRow(rowInner, ()=>{ state.soaks.items=state.soaks.items.filter(x=>x.id!==s.id); queueSave('soaks'); toast('Soak deleted'); go('soak'); }));
   });
   v.appendChild(card);
 };
@@ -839,14 +856,16 @@ views.log = (v) => {
   const list=sortedTests();
   const card=el('div',{class:'card'},[ el('h2',{},'Treatment log') ]);
   if(!list.length){ card.appendChild(emptyState('No test sessions yet','Run a test to generate your first plan.')); v.appendChild(card); return; }
+  card.appendChild(el('div',{class:'hint', style:'margin-top:4px'},'Tap a row to open it; swipe left to delete.'));
   list.forEach(t=>{
     const steps=(t.completedSteps||[]).filter(s=>s.status==='done').length;
     const chips=el('div',{class:'chips', style:'margin-top:6px'});
     (t.readings||[]).slice(0,7).forEach(r=> chips.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value)}, r.value)) );
-    card.appendChild(el('div',{class:'listrow', style:'cursor:pointer', onclick:()=>go('session',t.id)},[
+    const rowInner=el('div',{class:'listrow', style:'cursor:pointer', onclick:()=>go('session',t.id)},[
       el('div',{style:'flex:1'},[ el('b',{}, fmtDate(t.timestamp)), chips ]),
       el('small',{}, steps+' step'+(steps===1?'':'s')+' ✓')
-    ]));
+    ]);
+    card.appendChild(swipeRow(rowInner, ()=>{ state.tests.items=state.tests.items.filter(x=>x.id!==t.id); queueSave('tests'); toast('Session deleted'); go('log'); }));
   });
   v.appendChild(card);
 };
@@ -951,12 +970,56 @@ function exportBackup(){
 }
 
 function emptyState(title, sub){ return el('div',{class:'empty'},[ el('img',{src:'duck.svg'}), el('div',{},[ el('b',{},title), sub?el('div',{class:'hint', style:'margin-top:4px'},sub):null ]) ]); }
+const trunc = (s,n) => (s && s.length>n) ? s.slice(0,n-1)+'…' : (s||'');
+
+/* ---- swipe-left-to-delete row ---- */
+function swipeRow(fgNode, onDelete){
+  const wrap=el('div',{class:'swipe'});
+  const del=el('button',{class:'swipe-del', type:'button'},'Delete');
+  const fg=el('div',{class:'swipe-fg'},[fgNode]);
+  wrap.appendChild(del); wrap.appendChild(fg);
+  let startX=0,startY=0,dx=0,open=false,dragging=false,axis=null,moved=false;
+  fg.addEventListener('touchstart',(e)=>{ const t=e.touches[0]; startX=t.clientX; startY=t.clientY; dragging=true; axis=null; moved=false; fg.style.transition='none'; },{passive:true});
+  fg.addEventListener('touchmove',(e)=>{ if(!dragging) return; const t=e.touches[0]; const mx=t.clientX-startX, my=t.clientY-startY;
+    if(!axis){ if(Math.abs(mx)>Math.abs(my)+6) axis='h'; else if(Math.abs(my)>8) axis='v'; }
+    if(axis==='h'){ e.preventDefault(); moved=true; dx=Math.max(-104, Math.min(0, mx+(open?-92:0))); fg.style.transform='translateX('+dx+'px)'; }
+  },{passive:false});
+  const settle=()=>{ if(!dragging) return; dragging=false; fg.style.transition='transform .18s'; open = dx < -46; fg.style.transform='translateX('+(open?-92:0)+'px)'; };
+  fg.addEventListener('touchend',settle); fg.addEventListener('touchcancel',settle);
+  // swallow the tap that follows a swipe (so swiping a log row doesn't also open it)
+  fg.addEventListener('click',(e)=>{ if(moved||open){ e.stopPropagation(); e.preventDefault(); moved=false; } }, true);
+  del.addEventListener('click',()=>{ if(confirm('Delete this entry?')) onDelete(); else { open=false; fg.style.transition='transform .18s'; fg.style.transform='translateX(0)'; } });
+  return wrap;
+}
+
+/* ---- re-sync everything from OneDrive (pull-to-refresh) ---- */
+async function reloadData(){
+  await flushQueue(); // push any local edits first so a refresh can't clobber them
+  for(const key of ['settings','products','tests','soaks','maintenance','events']){
+    try{ const f=await readFile(FILES[key]); if(!f.missing) state[key]=JSON.parse(f.text); }catch(e){ console.warn('reload',key,e); }
+  }
+  try{ const r=await readFile(FILES.rules); if(!r.missing) state.rules=r.text; }catch(e){}
+  const mir={}; for(const k in state) mir[k]=state[k]; mirrorSave(mir); setSync('ok');
+}
+function initPullToRefresh(){
+  const ptr=$('#ptr'); if(!ptr) return; const ring=ptr.querySelector('.ring');
+  let startY=0, pulling=false, dist=0; const THRESH=70;
+  addEventListener('touchstart',(e)=>{ if(scrollY>0){ pulling=false; return; } startY=e.touches[0].clientY; pulling=true; dist=0; },{passive:true});
+  addEventListener('touchmove',(e)=>{ if(!pulling) return; dist=e.touches[0].clientY-startY;
+    if(dist>0 && scrollY<=0){ const d=Math.min(dist,120); ptr.style.opacity=Math.min(1,d/THRESH); ptr.style.transform='translateY('+(d*0.4)+'px)'; ring.textContent = d>=THRESH?'Release to refresh':'Pull to refresh'; }
+    else ptr.style.opacity=0;
+  },{passive:true});
+  addEventListener('touchend',async ()=>{ if(!pulling) return; pulling=false;
+    if(dist>=THRESH){ ring.textContent='Refreshing…'; ptr.style.opacity='1'; ptr.style.transform='translateY(28px)';
+      try{ await reloadData(); render(); toast('Refreshed'); }catch(e){ toast('Refresh failed'); } }
+    ptr.style.opacity='0'; ptr.style.transform='translateY(0)';
+  },{passive:true});
+}
 
 /* ============================================================
    BOOT
    ============================================================ */
 document.querySelectorAll('nav.tabs button').forEach(b=> b.addEventListener('click', ()=>go(b.dataset.route)) );
-$('#moreBtn').addEventListener('click', ()=>go('more'));
 
 async function boot(){
   const showGate=(err,disable)=>{ $('#gate').classList.remove('hidden'); if(err){ $('#gateErr').textContent=err; $('#gateErr').classList.remove('hidden'); if(disable) $('#signinBtn').disabled=true; } };
@@ -980,7 +1043,7 @@ $('#signinBtn').addEventListener('click', async ()=>{
 async function enterApp(){
   $('#app').classList.remove('hidden');
   const v=$('#view'); v.innerHTML='<div class="center" style="padding:40px"><span class="spin"></span> Loading your tub data…</div>';
-  try{ await loadAll(); flushQueue(); go('dashboard'); }
+  try{ await loadAll(); flushQueue(); initPullToRefresh(); go('dashboard'); }
   catch(e){ v.innerHTML=''; v.appendChild(el('div',{class:'err'},'Could not load data from OneDrive: '+(e.message||e))); console.error(e); }
 }
 
