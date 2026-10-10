@@ -223,7 +223,7 @@ async function getToken(){
   try{ const r=await msalApp.acquireTokenSilent({ scopes:CONFIG.SCOPES, account }); return r.accessToken; }
   catch(e){ await msalApp.acquireTokenRedirect({ scopes:CONFIG.SCOPES, account }); throw e; /* page redirects away */ }
 }
-function signOut(){ msalApp.logoutPopup({ account }).catch(()=>{}); localStorage.removeItem('tt_mirror'); }
+function signOut(){ localStorage.removeItem('tt_mirror'); msalApp.logoutRedirect({ account, postLogoutRedirectUri: location.origin+location.pathname }); }
 
 /* ============================================================
    GRAPH / ONEDRIVE STORAGE
@@ -958,7 +958,7 @@ views.settings = (v) => {
   // backup + sign out
   v.appendChild(el('div',{class:'card stack'},[ el('h3',{},'Data'),
     el('button',{class:'btn sm sub', onclick:exportBackup},'⬇ Export / backup JSON'),
-    el('button',{class:'btn sm danger', onclick:()=>{ if(confirm('Sign out?')){ signOut(); location.reload(); } }},'Sign out') ]));
+    el('button',{class:'btn sm danger', onclick:()=>{ if(confirm('Sign out?')) signOut(); }},'Sign out') ]));
 
   v.appendChild(el('div',{class:'card tight'},[ el('small',{html:`Tub: ${s.tub.model}, ${s.tub.persons}-person, ~${s.tub.gallons} gal · ${s.tub.sanitizer}. Data: <code>${CONFIG.BASE_PATH}</code>`}) ]));
 };
