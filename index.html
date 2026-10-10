@@ -101,6 +101,8 @@ textarea{min-height:96px; resize:vertical}
 .pill.neutral{background:var(--line); color:var(--muted)}
 
 .chips{display:flex; flex-wrap:wrap; gap:8px}
+.chips.even{flex-wrap:nowrap; gap:6px}
+.chips.even .chip{flex:1 1 0; min-width:0; padding:10px 2px; font-size:.9rem}
 .chip{border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:999px; padding:9px 14px; font-size:.95rem; min-width:46px; text-align:center}
 .chip.on{background:var(--brand); color:#fff; border-color:var(--brand)}
 .chip.range{border-style:dashed}
@@ -580,25 +582,44 @@ const views={};
 function go(r, arg){ route=r; arg&&(go._arg=arg); render(); document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.route===r)); window.scrollTo(0,0); }
 function render(){ const v=$('#view'); v.innerHTML=''; (views[route]||views.dashboard)(v, go._arg); go._arg=null; }
 
+/* ---------- Can I soak? (at-a-glance soak-readiness) ---------- */
+function soakReadiness(){
+  const lt=lastTest();
+  if(!lt) return {level:'unknown', label:'Run a test', note:'No test logged yet — run a test to find out.'};
+  let base;
+  if(lt.plan && lt.plan.soak_ready){
+    const sr=lt.plan.soak_ready;
+    base = sr==='yes'  ? {level:'yes',   label:'Yes',       note:lt.plan.soak_ready_note||'Water is in range.'}
+         : sr==='no'   ? {level:'no',    label:'Not today', note:lt.plan.soak_ready_note||'See the treatment plan.'}
+         :               {level:'maybe', label:'Not yet',   note:lt.plan.soak_ready_note||'After you finish today’s treatment steps.'};
+  } else {
+    const br=parseFloat(String((lt.readings.find(r=>/bromine/i.test(r.name))||{}).value));
+    base = isNaN(br) ? {level:'unknown', label:'Unsure',  note:'No bromine reading on the last test.'}
+         : br<3      ? {level:'no',      label:'Not yet', note:`Bromine ${br} ppm — below the 3–5 range. Shock/add tablets first.`}
+         : br>5      ? {level:'maybe',   label:'Not yet', note:`Bromine ${br} ppm — above 5; let it come down before soaking.`}
+         :             {level:'yes',     label:'Yes',     note:`Bromine ${br} ppm — in the 3–5 range.`};
+  }
+  const ls=lastSoak();
+  if(ls && new Date(ls.datetime) > new Date(lt.timestamp)){
+    base = { level: base.level==='yes'?'maybe':base.level, label: base.level==='yes'?'Re-test first':base.label,
+             note: 'You’ve soaked since the last test — re-test to be sure. '+(base.note||'') };
+  }
+  return base;
+}
+
 /* ---------- DASHBOARD ---------- */
 views.dashboard = (v) => {
   const lt=lastTest(), ls=lastSoak(), ltr=lastTreatment(), drain=lastDrain();
   const since = soaksSince(ltr?ltr.timestamp:null);
 
-  // status
-  let status={cls:'good', text:'Looks good'};
-  if(lt){
-    const br=(lt.readings.find(r=>/bromine/i.test(r.name))||{}).value;
-    const brv=parseFloat(String(br));
-    if(since.length) status={cls:'warn', text:`Treatment due — ${since.length} soak(s) since last treatment`};
-    else if(!isNaN(brv) && brv<3) status={cls:'bad', text:'Bromine low — not soak-ready'};
-    else if(!isNaN(brv) && brv>5) status={cls:'warn', text:'Bromine high — let it come down'};
-    else status={cls:'good', text:'Soak-ready'};
-  } else status={cls:'neutral', text:'No test logged yet'};
-
-  v.appendChild(el('div',{class:'card tight'},[
-    el('div',{class:'row between'},[ el('h2',{},'Water status'), el('span',{class:'pill '+status.cls}, status.text) ]),
-    lt? el('small',{}, 'From last test '+agoText(lt.timestamp)) : el('small',{},'Run a test to get a plan')
+  // Can I soak?
+  const sr=soakReadiness();
+  const srCls={yes:'good',maybe:'warn',no:'bad',unknown:'neutral'}[sr.level];
+  const srIcon={yes:'✅',maybe:'⚠️',no:'⛔',unknown:'❓'}[sr.level];
+  v.appendChild(el('div',{class:'card'},[
+    el('div',{class:'row between'},[ el('h2',{},'Can I soak?'), el('span',{class:'pill '+srCls, style:'font-size:.95rem'}, srIcon+' '+sr.label) ]),
+    el('p',{style:'margin:8px 0 0'}, sr.note),
+    lt? el('small',{html:`From last test ${agoText(lt.timestamp)} · <a href="#" onclick="go('session','${lt.id}');return false">view</a>`}) : el('small',{},'Run a test to get a reading and plan.')
   ]));
 
   if(since.length){
@@ -619,8 +640,9 @@ views.dashboard = (v) => {
     el('h3',{},'At a glance'),
     kv('Last treatment', ltr? `${agoText(ltr.timestamp)} — ${trunc((ltr.completedSteps||[]).filter(s=>s.status==='done'&&s.action).map(s=>s.action.split(/[.:]/)[0].trim()).join(', '),70)||'logged'}` : 'none'),
     kv('Last soak', ls? `${agoText(ls.datetime)} — ${ls.durationMin||'?'} min, ${ls.people||'?'} ${(+ls.people===1)?'person':'people'}` : 'none'),
-    kv('Water age', drain? `${daysSince(drain.date)} days since refill` : 'unknown'),
-    kv('Next drain/refill', drain? inDays(state.settings.maintenanceIntervals.drainDays - daysSince(drain.date)) : 'log a refill to track')
+    kv('Water age', drain? `${daysSince(drain.date)} days since refill` : 'not logged'),
+    kv('Next drain/refill', drain? inDays(state.settings.maintenanceIntervals.drainDays - daysSince(drain.date)) : '—'),
+    !drain ? el('small',{html:'Log your last drain/refill in <a href="#" onclick="go(\'maintenance\');return false">Maintenance</a> to track water age.'}) : null
   ]));
 
   // upcoming
@@ -654,7 +676,7 @@ views.test = (v) => {
   const form=el('div',{class:'card stack'});
   strip.stripProfile.pads.forEach((pad,i)=>{
     session.readings.push({ name:pad.name, unit:pad.unit, value:null });
-    const chips=el('div',{class:'chips'});
+    const chips=el('div',{class:'chips even'});
     const selected={idx:[]};
     pad.chart.forEach((val,ci)=>{
       const chip=el('button',{class:'chip', type:'button'}, String(val));
@@ -823,7 +845,7 @@ async function retestFlow(t, step){
   const readings = strip.stripProfile.pads.map(p=>({name:p.name,unit:p.unit,value:null}));
   const form=el('div',{class:'card stack'});
   strip.stripProfile.pads.forEach((pad,i)=>{
-    const chips=el('div',{class:'chips'});
+    const chips=el('div',{class:'chips even'});
     pad.chart.forEach(val=>{ const c=el('button',{class:'chip',type:'button'},String(val)); c.addEventListener('click',()=>{ readings[i].value=String(val); [...chips.children].forEach(x=>x.classList.remove('on')); c.classList.add('on'); }); chips.appendChild(c); });
     form.appendChild(el('div',{},[ el('label',{class:'fld'}, pad.name), chips ]));
   });
@@ -902,10 +924,57 @@ views.more = (v) => {
     menuItem('🧴 Products','Manage test strips, chemicals',()=>go('products')),
     menuItem('📖 Rules','Edit the chemistry knowledge base',()=>go('rules')),
     menuItem('⚙️ Settings','Profile, targets, API key, backup',()=>go('settings')),
-    menuItem('🧰 Maintenance','Filter, drain/refill, repairs (Phase 2)',()=>toast('Maintenance log lands in Phase 2'))
+    menuItem('🧰 Maintenance','Drain/refill (water age), filter, enzyme, repairs',()=>go('maintenance'))
   ]));
 };
 function menuItem(title, sub, fn){ return el('div',{class:'listrow', style:'cursor:pointer', onclick:fn},[ el('div',{},[ el('b',{},title), el('div',{class:'hint'},sub) ]), el('span',{class:'muted'},'›') ]); }
+
+/* ---------- MAINTENANCE ---------- */
+const MAINT_TYPES=[
+  {v:'drain-refill', label:'Drain / refill', icon:'🪣'},
+  {v:'filter-rinse', label:'Filter rinse', icon:'🧽'},
+  {v:'filter-replace', label:'Filter replacement', icon:'🧰'},
+  {v:'enzyme', label:'Enzyme dose', icon:'🧪'},
+  {v:'repair', label:'Repair / part', icon:'🔧'}
+];
+views.maintenance = (v) => {
+  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('more'), style:'margin-bottom:10px'},'← More'));
+  const typeSel=el('select',{}, MAINT_TYPES.map(t=>el('option',{value:t.v}, t.label)));
+  const dt=el('input',{type:'datetime-local'}); dt.value=localInput(new Date());
+  const cost=el('input',{type:'number', placeholder:'0.00', min:'0', step:'0.01'});
+  const partName=el('input',{type:'text', placeholder:'part name'});
+  const partNum=el('input',{type:'text', placeholder:'part number'});
+  const notes=el('input',{type:'text', placeholder:'notes (optional)'});
+  const repairWrap=el('div',{class:'stack hidden'},[ labeled('Part name', partName), labeled('Part number', partNum), labeled('Cost ($)', cost) ]);
+  typeSel.addEventListener('change',()=>{ repairWrap.classList.toggle('hidden', typeSel.value!=='repair'); });
+  v.appendChild(el('div',{class:'card stack'},[
+    el('h2',{},'Log maintenance'),
+    labeled('Type', typeSel),
+    labeled('When', dt),
+    repairWrap,
+    labeled('Notes', notes),
+    el('button',{class:'btn', onclick:()=>{
+      const m={ id:uid(), type:typeSel.value, date:new Date(dt.value||Date.now()).toISOString(),
+        cost:(typeSel.value==='repair'&&cost.value)?+cost.value:null,
+        partName:(typeSel.value==='repair'?partName.value.trim():'')||null,
+        partNumber:(typeSel.value==='repair'?partNum.value.trim():'')||null,
+        notes:notes.value.trim() };
+      state.maintenance.items.push(m); queueSave('maintenance');
+      toast(m.type==='drain-refill'?'Refill logged — water age reset':'Maintenance logged'); go('maintenance');
+    }},'Save entry')
+  ]));
+  const list=[...state.maintenance.items].sort((a,b)=> new Date(b.date)-new Date(a.date));
+  const card=el('div',{class:'card'},[ el('h3',{},'History') ]);
+  if(!list.length){ card.appendChild(emptyState('No maintenance logged yet','')); v.appendChild(card); return; }
+  card.appendChild(el('div',{class:'hint', style:'margin-top:4px'},'Swipe a row left to delete.'));
+  list.slice(0,40).forEach(m=>{
+    const t=MAINT_TYPES.find(x=>x.v===m.type)||{label:m.type,icon:'•'};
+    const sub=[m.partName, m.partNumber?('#'+m.partNumber):null, m.cost!=null?('$'+m.cost):null, m.notes].filter(Boolean).join(' · ');
+    const row=el('div',{class:'listrow'},[ el('div',{style:'flex:1'},[ el('b',{}, t.icon+' '+t.label), el('div',{class:'hint'}, fmtDate(m.date)+(sub?(' · '+sub):'')) ]) ]);
+    card.appendChild(swipeRow(row, ()=>{ state.maintenance.items=state.maintenance.items.filter(x=>x.id!==m.id); queueSave('maintenance'); toast('Deleted'); go('maintenance'); }));
+  });
+  v.appendChild(card);
+};
 
 /* ---------- PRODUCTS ---------- */
 views.products = (v) => {
