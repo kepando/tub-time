@@ -214,13 +214,14 @@ function initMsal(){
 }
 async function restoreAccount(){ const a=msalApp.getAllAccounts(); if(a.length){ account=a[0]; return true; } return false; }
 async function signIn(){
-  // loginPopup works in iOS Safari and installed PWA; loginRedirect breaks standalone PWAs.
-  const r = await msalApp.loginPopup({ scopes:CONFIG.SCOPES });
-  account = r.account; msalApp.setActiveAccount(account);
+  // Redirect flow — the only reliable interactive flow on iOS: loginPopup fails in
+  // an installed PWA (window.open returns null) and is blocked by Safari/ITP in a popup.
+  // The response is handled by handleRedirectPromise() on the next load.
+  await msalApp.loginRedirect({ scopes:CONFIG.SCOPES });
 }
 async function getToken(){
   try{ const r=await msalApp.acquireTokenSilent({ scopes:CONFIG.SCOPES, account }); return r.accessToken; }
-  catch(e){ const r=await msalApp.acquireTokenPopup({ scopes:CONFIG.SCOPES }); account=r.account; return r.accessToken; }
+  catch(e){ await msalApp.acquireTokenRedirect({ scopes:CONFIG.SCOPES, account }); throw e; /* page redirects away */ }
 }
 function signOut(){ msalApp.logoutPopup({ account }).catch(()=>{}); localStorage.removeItem('tt_mirror'); }
 
@@ -1029,14 +1030,18 @@ async function boot(){
   try{
     initMsal();
     await (msalApp.initialize?.() || Promise.resolve());
+    // Process a returning redirect sign-in (if any) before falling back to cached account.
+    const redirectResult = await msalApp.handleRedirectPromise();
+    if(redirectResult && redirectResult.account){ account=redirectResult.account; msalApp.setActiveAccount(account); await enterApp(); return; }
     const signed = await restoreAccount();
     if(signed){ msalApp.setActiveAccount(account); await enterApp(); }
     else $('#gate').classList.remove('hidden');
-  }catch(e){ console.error(e); showGate('Startup error: '+(e.message||e)); }
+  }catch(e){ console.error(e); showGate('Sign-in error: '+(e.message||e)); }
 }
 $('#signinBtn').addEventListener('click', async ()=>{
-  const b=$('#signinBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span> Signing in…';
-  try{ await signIn(); $('#gate').classList.add('hidden'); await enterApp(); }
+  const b=$('#signinBtn'); b.disabled=true; b.innerHTML='<span class="spin"></span> Redirecting…';
+  // loginRedirect navigates away; the return is handled by handleRedirectPromise() in boot().
+  try{ await signIn(); }
   catch(e){ b.disabled=false; b.textContent='Sign in with Microsoft'; $('#gateErr').textContent='Sign-in failed: '+(e.message||e); $('#gateErr').classList.remove('hidden'); }
 });
 async function enterApp(){
