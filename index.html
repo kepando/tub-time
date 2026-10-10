@@ -91,6 +91,7 @@ label.fld{display:block; font-size:.85rem; color:var(--muted); margin-bottom:5px
 input,select,textarea{width:100%; min-width:0; max-width:100%; padding:12px; border:1px solid var(--line); border-radius:11px; background:var(--bg);
   color:var(--ink); font-size:1rem; font-family:inherit; box-sizing:border-box}
 input[type="datetime-local"],input[type="date"],input[type="time"]{font-size:.95rem; text-align:left; -webkit-appearance:none; appearance:none}
+input[type="checkbox"],input[type="radio"]{width:auto; min-width:0; max-width:none; padding:0; margin:0; flex:none; accent-color:var(--brand); -webkit-appearance:auto; appearance:auto; transform:scale(1.2)}
 textarea{min-height:96px; resize:vertical}
 
 .pill{display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; font-size:.78rem; font-weight:600}
@@ -387,7 +388,7 @@ function defaultSettings(){
 function defaultProducts(){
   const p = (o)=>Object.assign({ id:uid(), active:true, archived:false, dosePerGal:null, doseConverted:'', unit:'', warnings:'', imagePath:null, notes:'' }, o);
   return {
-    schemaVersion:1,
+    schemaVersion:2,
     categories:['Test strips','Bromine tablets','Calcium (hardness) increaser','Alkalinity increaser','Shock','pH Up','pH Down','Anti-foam','Enzyme clarifier'],
     items:[
       p({ category:'Alkalinity increaser', brand:'Oester', name:'Alkalinity Up', activeIngredient:'sodium bicarbonate' }),
@@ -397,7 +398,12 @@ function defaultProducts(){
       p({ category:'Shock', brand:'SpaGuard', name:'Enhanced Shock', activeIngredient:'non-chlorine MPS (potassium monopersulfate)', dosePerGal:'3 tbsp / 500 gal (label)', doseConverted:'≈ 5½ tsp per dose for 305 gal', unit:'tsp' }),
       p({ category:'Bromine tablets', brand:'Bromiguard', name:'1-inch bromine tablets', activeIngredient:'bromine (BCDMH)', doseConverted:'2 in filter compartment + 2–3 in floater', unit:'tablet' }),
       p({ category:'Anti-foam', brand:'', name:'Foam reducer / defoamer', activeIngredient:'', doseConverted:'HALF label dose; last, after shock has circulated', unit:'' }),
-      p({ category:'Enzyme clarifier', brand:'(TBD — must be bromine-compatible)', name:'Spa enzyme clarifier', activeIngredient:'enzymes', doseConverted:'small weekly dose per label, scaled to 305 gal', unit:'' }),
+      p({ category:'Enzyme clarifier', brand:'SpaGuard', name:'Natural Spa Enzyme', activeIngredient:'natural enzyme blend (biodegradable); bromine- & chlorine-compatible',
+        dosePerGal:'2 tbsp (1 fl oz) per 100 gal (label)',
+        doseConverted:'≈ ⅓ cup + 2 tsp (~18 tsp) per weekly dose for 305 gal; 2–3×/week in heavy use; do not increase',
+        unit:'cup',
+        warnings:'Eye & skin irritation. Add with circulation running, when bromine is 3–5 ppm — never with/just after shock. May foam slightly (use anti-foam). Shake well before use.',
+        notes:'1 qt (946 mL) bottle. Weekly enzyme per the rules; cuts scum line, odors, and post-soak bromine demand.' }),
       p({ category:'Test strips', brand:'(current)', name:'7-pad test strips', activeIngredient:'', stripVersion:'1.0 (11-2025)', stripProfile:{
         pads:[
           { name:'Total Hardness', unit:'ppm', chart:[0,25,50,120,250,425] },
@@ -414,6 +420,25 @@ function defaultProducts(){
 }
 const emptyColl = () => ({ schemaVersion:1, items:[] });
 
+// One-time upgrade of existing stores (products.json < v2): fill real SpaGuard enzyme dosing.
+function migrateProducts(){
+  const pr=state.products; if(!pr||!Array.isArray(pr.items)) return; let changed=false;
+  if((pr.schemaVersion||1) < 2){
+    const enz = pr.items.find(x=> x.category==='Enzyme clarifier' && (/TBD/i.test(x.brand||'') || x.name==='Spa enzyme clarifier' || !/cup|tsp/i.test(x.doseConverted||'')));
+    if(enz){
+      enz.brand='SpaGuard'; enz.name='Natural Spa Enzyme';
+      enz.activeIngredient='natural enzyme blend (biodegradable); bromine- & chlorine-compatible';
+      enz.dosePerGal='2 tbsp (1 fl oz) per 100 gal (label)';
+      enz.doseConverted='≈ ⅓ cup + 2 tsp (~18 tsp) per weekly dose for 305 gal; 2–3×/week in heavy use; do not increase';
+      enz.unit='cup';
+      enz.warnings='Eye & skin irritation. Add with circulation running, when bromine is 3–5 ppm — never with/just after shock. May foam slightly (use anti-foam). Shake well before use.';
+      enz.notes='1 qt (946 mL) bottle. Weekly enzyme per the rules; cuts scum line, odors, and post-soak bromine demand.';
+    }
+    pr.schemaVersion=2; changed=true;
+  }
+  if(changed) queueSave('products');
+}
+
 async function loadAll(){
   await ensureFolders();
   const defaults = { settings:defaultSettings, products:defaultProducts, tests:emptyColl, soaks:emptyColl, maintenance:emptyColl, events:emptyColl };
@@ -425,6 +450,7 @@ async function loadAll(){
   const r = await readFile(FILES.rules);
   if(r.missing){ state.rules=DEFAULT_RULES; await writeFile(FILES.rules, DEFAULT_RULES); }
   else state.rules = r.text;
+  migrateProducts();
   // mirror snapshot
   const mir={}; for(const k in state) mir[k]=state[k]; mirrorSave(mir);
   setSync('ok');
@@ -883,20 +909,77 @@ function menuItem(title, sub, fn){ return el('div',{class:'listrow', style:'curs
 
 /* ---------- PRODUCTS ---------- */
 views.products = (v) => {
-  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('more'), style:'margin-bottom:10px'},'← More'));
+  v.appendChild(el('div',{class:'row between', style:'margin-bottom:10px'},[
+    el('button',{class:'btn sm sub', onclick:()=>go('more')},'← More'),
+    el('button',{class:'btn sm', onclick:()=>go('productEdit','new')},'+ Add product')
+  ]));
   state.products.categories.forEach(cat=>{
     const items=state.products.items.filter(p=>p.category===cat);
     const card=el('div',{class:'card'},[ el('h3',{},cat) ]);
     if(!items.length) card.appendChild(el('small',{},'None yet'));
     items.forEach(p=>{
-      card.appendChild(el('div',{class:'listrow'},[
+      card.appendChild(el('div',{class:'listrow', style:'cursor:pointer', onclick:()=>go('productEdit',p.id)},[
         el('div',{style:'flex:1'},[ el('b',{}, (p.brand?p.brand+' ':'')+p.name), el('div',{class:'hint'}, [p.activeIngredient, p.doseConverted].filter(Boolean).join(' · ')+(p.stripProfile?(' · '+p.stripProfile.pads.length+' pads'):'')) ]),
         el('span',{class:'pill '+(p.active&&!p.archived?'good':'neutral')}, p.archived?'archived':(p.active?'active':'off'))
       ]));
     });
     v.appendChild(card);
   });
-  v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'📷 Label-photo extraction (auto-filling dose & strip profiles) arrives in Phase 2. For now, seeded products are editable here in a later build.'}) ]));
+  v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'Tap a product to edit its dosing & notes. 📷 Label-photo extraction (auto-filling these from a bottle photo) arrives in Phase 2.'}) ]));
+};
+
+/* ---------- PRODUCT ADD / EDIT ---------- */
+views.productEdit = (v, arg) => {
+  const isNew = (arg==='new' || !arg);
+  const prod = isNew
+    ? { id:uid(), category:state.products.categories[0], brand:'', name:'', activeIngredient:'', dosePerGal:null, doseConverted:'', unit:'', warnings:'', notes:'', imagePath:null, active:true, archived:false }
+    : state.products.items.find(x=>x.id===arg);
+  if(!prod){ v.appendChild(emptyState('Product not found','')); return; }
+  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('products'), style:'margin-bottom:10px'},'← Products'));
+
+  const catSel=el('select',{}, state.products.categories.map(c=> el('option', c===prod.category?{value:c,selected:'selected'}:{value:c}, c)));
+  const brand=el('input',{type:'text', value:prod.brand||'', placeholder:'Brand'});
+  const name=el('input',{type:'text', value:prod.name||'', placeholder:'Product name'});
+  const ingr=el('input',{type:'text', value:prod.activeIngredient||'', placeholder:'e.g. natural enzyme blend'});
+  const labelDose=el('input',{type:'text', value:prod.dosePerGal||'', placeholder:'as printed, e.g. 2 tbsp per 100 gal'});
+  const conv=el('textarea',{placeholder:'Dose converted to tsp/cup/tablet for your 305 gal tub — this is what the plan uses'}); conv.value=prod.doseConverted||'';
+  const unit=el('select',{}, ['','tsp','cup','tablet','none'].map(u=> el('option', u===(prod.unit||'')?{value:u,selected:'selected'}:{value:u}, u||'(unit)')));
+  const warn=el('textarea',{placeholder:'Warnings / timing'}); warn.value=prod.warnings||'';
+  const notes=el('textarea',{placeholder:'Notes'}); notes.value=prod.notes||'';
+  const activeChk=el('input',{type:'checkbox'}); if(prod.active&&!prod.archived) activeChk.checked=true;
+
+  const card=el('div',{class:'card stack'},[
+    el('h2',{}, isNew?'Add product':'Edit product'),
+    labeled('Category', catSel),
+    labeled('Brand', brand),
+    labeled('Name', name),
+    labeled('Active ingredient', ingr),
+    labeled('Label dose (as printed)', labelDose),
+    labeled('Dose for your tub (tsp/cup/tablet) — sent to the plan', conv),
+    labeled('Dose unit', unit),
+    labeled('Warnings / timing', warn),
+    labeled('Notes', notes),
+    el('label',{class:'row', style:'gap:8px'},[ activeChk, el('span',{},'Active product for this category') ])
+  ]);
+  if(prod.stripProfile) card.appendChild(el('div',{class:'hint'},'This is a test-strip product. Editing its pad order / chart values comes in Phase 2 (photo extraction); other fields here still save.'));
+  v.appendChild(card);
+
+  const err=el('div',{class:'err hidden'}); v.appendChild(err);
+  v.appendChild(el('button',{class:'btn', onclick:()=>{
+    if(!name.value.trim()){ err.textContent='Enter a product name.'; err.classList.remove('hidden'); return; }
+    prod.category=catSel.value; prod.brand=brand.value.trim(); prod.name=name.value.trim();
+    prod.activeIngredient=ingr.value.trim(); prod.dosePerGal=labelDose.value.trim()||null;
+    prod.doseConverted=conv.value.trim(); prod.unit=unit.value; prod.warnings=warn.value.trim(); prod.notes=notes.value.trim();
+    prod.active=activeChk.checked; if(activeChk.checked) prod.archived=false;
+    if(isNew) state.products.items.push(prod);
+    if(prod.active) state.products.items.forEach(x=>{ if(x!==prod && x.category===prod.category && !x.stripProfile) x.active=false; });
+    queueSave('products'); toast('Product saved'); go('products');
+  }},'Save product'));
+
+  if(!isNew){
+    v.appendChild(el('button',{class:'btn sub', style:'margin-top:8px', onclick:()=>{ prod.archived=!prod.archived; if(prod.archived) prod.active=false; queueSave('products'); toast(prod.archived?'Archived':'Unarchived'); go('products'); }}, prod.archived?'Unarchive':'Archive'));
+    if(!prod.stripProfile) v.appendChild(el('button',{class:'btn danger', style:'margin-top:8px', onclick:()=>{ if(confirm('Delete this product?')){ state.products.items=state.products.items.filter(x=>x.id!==prod.id); queueSave('products'); toast('Deleted'); go('products'); } }},'Delete product'));
+  }
 };
 
 /* ---------- RULES EDITOR ---------- */
