@@ -253,6 +253,8 @@ async function ensureFolders(){
   }
   await mkdir('/zApplications','TubTime');
   await mkdir(CONFIG.BASE_PATH,'knowledge');
+  await mkdir(CONFIG.BASE_PATH,'products');
+  await mkdir(CONFIG.BASE_PATH+'/products','images');
 }
 const etags = {};
 async function readFile(name){
@@ -559,6 +561,75 @@ async function generatePlan(session, priorMessages){
   raw = await callClaude(retryMsgs);
   try{ const p=extractJson(raw); if(validatePlan(p)) return { plan:p, messages:[...retryMsgs,{role:'assistant',content:raw}] }; }catch(e){}
   return { raw, messages:[...retryMsgs,{role:'assistant',content:raw}] };
+}
+
+/* ============================================================
+   LABEL-PHOTO EXTRACTION (Phase 2)
+   ============================================================ */
+function pickImage(){
+  return new Promise((resolve)=>{
+    const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.setAttribute('capture','environment');
+    inp.onchange=()=>resolve((inp.files&&inp.files[0])||null);
+    inp.click();
+  });
+}
+function processImage(file){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file); const img=new Image();
+    img.onload=()=>{ URL.revokeObjectURL(url);
+      const max=1568, scale=Math.min(1, max/Math.max(img.width,img.height));
+      const w=Math.max(1,Math.round(img.width*scale)), h=Math.max(1,Math.round(img.height*scale));
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      cv.toBlob((blob)=>{ if(!blob){ reject(new Error('image encode failed')); return; }
+        const r=new FileReader(); r.onload=()=>resolve({ blob, base64:String(r.result).split(',')[1], mediaType:'image/jpeg' }); r.onerror=reject; r.readAsDataURL(blob);
+      }, 'image/jpeg', 0.82);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('could not read image')); };
+    img.src=url;
+  });
+}
+async function extractFromImage(base64, mediaType, system, promptText){
+  const content=[{ type:'image', source:{ type:'base64', media_type:mediaType, data:base64 } }, { type:'text', text:promptText }];
+  let raw=await callClaude([{role:'user',content}], system);
+  try{ return extractJson(raw); }
+  catch(e){
+    raw=await callClaude([{role:'user',content},{role:'assistant',content:raw},{role:'user',content:'Respond with ONLY the JSON object, no prose or code fences.'}], system);
+    return extractJson(raw); // throws if still unparseable
+  }
+}
+async function uploadImage(path, blob){
+  const res=await graph(contentUrl(path), { method:'PUT', headers:{ 'Content-Type': blob.type||'image/jpeg' }, body:blob });
+  if(!res.ok){ const t=await res.text(); throw new Error('image upload '+res.status+': '+t.slice(0,120)); }
+  return true;
+}
+async function imageDownloadUrl(path){
+  try{ const r=await graph(itemPath(path)); if(!r.ok) return null; const m=await r.json(); return m['@microsoft.graph.downloadUrl']||null; }catch(e){ return null; }
+}
+const PRODUCT_SCAN_SYSTEM = `You extract structured data from a photo of a spa / hot-tub chemical product label. The tub is ${'305'} gallons and is measured ONLY in teaspoons and cups — never tablespoons or fluid ounces. Conversions: 1 tbsp = 3 tsp; 1 cup = 16 tbsp = 48 tsp; 1 fl oz = 2 tbsp = 6 tsp.
+Return ONLY a JSON object (no prose, no code fences):
+{"category":"","brand":"","name":"","activeIngredient":"","dosePerGal":"","doseConverted":"","unit":"","warnings":"","notes":""}
+- category: the single best match from ["Test strips","Bromine tablets","Calcium (hardness) increaser","Alkalinity increaser","Shock","pH Up","pH Down","Anti-foam","Enzyme clarifier"].
+- dosePerGal: the dose exactly as printed on the label (keep its original units/wording).
+- doseConverted: that dose converted to tsp/cup for a 305-gallon tub (do the math), including frequency if the label gives one (e.g. "≈ ⅓ cup weekly").
+- unit: primary dosing unit, one of "tsp","cup","tablet","none".
+- warnings: brief cautions or timing notes.
+- notes: anything else useful (container size, sanitizer compatibility). Use "" for anything not visible.`;
+const STRIP_SCAN_SYSTEM = `You extract the color-chart from a photo of a spa / hot-tub TEST STRIP bottle.
+Return ONLY a JSON object (no prose, no code fences):
+{"brand":"","name":"","version":"","pads":[{"name":"","unit":"","chart":[]}]}
+- pads: every reagent pad, in the printed top-to-bottom order.
+- chart: that pad's values left-to-right as they appear on the bottle, as JSON numbers (use a string like "30-50" only for a labeled range block). Include every block.
+- unit: e.g. "ppm", or "" for pH.`;
+async function scanProductInto(fields, setBusy){
+  const f=await pickImage(); if(!f) return null;
+  setBusy(true);
+  try{
+    const img=await processImage(f);
+    const data=await extractFromImage(img.base64, img.mediaType, PRODUCT_SCAN_SYSTEM, 'Extract this product label.');
+    fields(data);
+    return { blob:img.blob };
+  } finally { setBusy(false); }
 }
 
 /* ============================================================
@@ -984,6 +1055,19 @@ views.products = (v) => {
     el('button',{class:'btn sm sub', onclick:()=>go('more')},'← More'),
     el('button',{class:'btn sm', onclick:()=>go('productEdit','new')},'+ Add product')
   ]));
+  const stripBtn=el('button',{class:'btn ghost sm', style:'width:100%;margin-bottom:12px'},'📷 Scan test-strip bottle');
+  stripBtn.addEventListener('click', async ()=>{
+    if(!(state.settings.apiKey||'').trim()){ toast('Add your Anthropic API key in Settings first.'); return; }
+    const prev=stripBtn.innerHTML; stripBtn.disabled=true; stripBtn.innerHTML='<span class="spin"></span> Reading strip…';
+    try{
+      const f=await pickImage(); if(!f) return;
+      const img=await processImage(f);
+      const data=await extractFromImage(img.base64, img.mediaType, STRIP_SCAN_SYSTEM, 'Extract this test strip’s pads and chart values.');
+      pendingStrip={ data, blob:img.blob }; go('stripReview');
+    }catch(e){ toast('Couldn’t read strip: '+(e.message||e)); }
+    finally{ stripBtn.disabled=false; stripBtn.innerHTML=prev; }
+  });
+  v.appendChild(stripBtn);
   state.products.categories.forEach(cat=>{
     const items=state.products.items.filter(p=>p.category===cat);
     const card=el('div',{class:'card'},[ el('h3',{},cat) ]);
@@ -999,6 +1083,49 @@ views.products = (v) => {
   v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'Tap a product to edit its dosing & notes. 📷 Label-photo extraction (auto-filling these from a bottle photo) arrives in Phase 2.'}) ]));
 };
 
+/* ---------- TEST-STRIP SCAN REVIEW ---------- */
+let pendingStrip=null;
+views.stripReview = (v) => {
+  if(!pendingStrip){ go('products'); return; }
+  const d=pendingStrip.data||{};
+  const pads=(d.pads||[]).map(p=>({ name:p.name||'', unit:p.unit||'', chart:Array.isArray(p.chart)?p.chart:[] }));
+  v.appendChild(el('button',{class:'btn sm sub', onclick:()=>{ pendingStrip=null; go('products'); }, style:'margin-bottom:10px'},'← Cancel'));
+  v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'Review what Claude read from the bottle. Fix any pad name, unit, or values, then Save — this becomes your active strip and updates the Test form.'}) ]));
+  const brand=el('input',{type:'text', value:d.brand||'', placeholder:'Brand'});
+  const name=el('input',{type:'text', value:d.name||'Test strips', placeholder:'Name'});
+  const version=el('input',{type:'text', value:d.version||'', placeholder:'Version (optional)'});
+  v.appendChild(el('div',{class:'card stack'},[ labeled('Brand', brand), labeled('Name', name), labeled('Version', version) ]));
+
+  const padInputs=[];
+  const padCard=el('div',{class:'card stack'},[ el('h3',{},'Pads (top → bottom)') ]);
+  if(!pads.length) padCard.appendChild(el('small',{},'No pads detected — go back and try a clearer photo.'));
+  pads.forEach((pad,i)=>{
+    const pn=el('input',{type:'text', value:pad.name, placeholder:'Pad name'});
+    const pu=el('input',{type:'text', value:pad.unit, placeholder:'unit'});
+    const pc=el('input',{type:'text', value:pad.chart.join(', '), placeholder:'values, comma-separated'});
+    padInputs.push({pn,pu,pc});
+    padCard.appendChild(el('div',{class:'card tight stack', style:'background:var(--bg)'},[
+      labeled('Pad '+(i+1), pn),
+      el('div',{class:'grid2'},[ labeled('Unit', pu), labeled('Values', pc) ])
+    ]));
+  });
+  v.appendChild(padCard);
+
+  v.appendChild(el('button',{class:'btn', onclick:async (e)=>{
+    const outPads=padInputs.map(pi=>({ name:pi.pn.value.trim(), unit:pi.pu.value.trim(),
+      chart: pi.pc.value.split(',').map(s=>{ s=s.trim(); if(s==='') return null; const n=Number(s); return isNaN(n)?s:n; }).filter(x=>x!==null)
+    })).filter(p=>p.name && p.chart.length);
+    if(!outPads.length){ toast('Add at least one pad with values.'); return; }
+    const newStrip={ id:uid(), category:'Test strips', brand:brand.value.trim()||'(scanned)', name:name.value.trim()||'Test strips',
+      activeIngredient:'', stripVersion:version.value.trim(), active:true, archived:false, dosePerGal:null, doseConverted:'', unit:'', warnings:'', notes:'', imagePath:null,
+      stripProfile:{ pads:outPads } };
+    state.products.items.forEach(x=>{ if(x.stripProfile && x.active){ x.active=false; x.archived=true; } }); // archive old strip
+    state.products.items.push(newStrip);
+    if(pendingStrip.blob){ e.target.disabled=true; e.target.innerHTML='<span class="spin"></span> Saving…'; try{ const path='products/images/'+newStrip.id+'.jpg'; await uploadImage(path, pendingStrip.blob); newStrip.imagePath=path; }catch(err){} }
+    queueSave('products'); pendingStrip=null; toast('Strip saved — Test form updated'); go('products');
+  }},'Save strip'));
+};
+
 /* ---------- PRODUCT ADD / EDIT ---------- */
 views.productEdit = (v, arg) => {
   const isNew = (arg==='new' || !arg);
@@ -1006,6 +1133,7 @@ views.productEdit = (v, arg) => {
     ? { id:uid(), category:state.products.categories[0], brand:'', name:'', activeIngredient:'', dosePerGal:null, doseConverted:'', unit:'', warnings:'', notes:'', imagePath:null, active:true, archived:false }
     : state.products.items.find(x=>x.id===arg);
   if(!prod){ v.appendChild(emptyState('Product not found','')); return; }
+  let pendingImage=null;
   v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('products'), style:'margin-bottom:10px'},'← Products'));
 
   const catSel=el('select',{}, state.products.categories.map(c=> el('option', c===prod.category?{value:c,selected:'selected'}:{value:c}, c)));
@@ -1019,8 +1147,31 @@ views.productEdit = (v, arg) => {
   const notes=el('textarea',{placeholder:'Notes'}); notes.value=prod.notes||'';
   const activeChk=el('input',{type:'checkbox'}); if(prod.active&&!prod.archived) activeChk.checked=true;
 
+  const thumbWrap=el('div',{});
+  const scanBtn=el('button',{class:'btn ghost'},'📷 Scan label photo');
+  scanBtn.addEventListener('click', async ()=>{
+    if(!(state.settings.apiKey||'').trim()){ toast('Add your Anthropic API key in Settings first.'); return; }
+    const prev=scanBtn.innerHTML; scanBtn.disabled=true; scanBtn.innerHTML='<span class="spin"></span> Reading label…';
+    try{
+      const res=await scanProductInto((data)=>{
+        if(data.category && state.products.categories.includes(data.category)) catSel.value=data.category;
+        if(data.brand) brand.value=data.brand;
+        if(data.name) name.value=data.name;
+        if(data.activeIngredient) ingr.value=data.activeIngredient;
+        if(data.dosePerGal) labelDose.value=data.dosePerGal;
+        if(data.doseConverted) conv.value=data.doseConverted;
+        if(data.unit && ['','tsp','cup','tablet','none'].includes(data.unit)) unit.value=data.unit;
+        if(data.warnings) warn.value=data.warnings;
+        if(data.notes) notes.value=data.notes;
+      }, ()=>{});
+      if(res){ pendingImage=res.blob; thumbWrap.innerHTML=''; thumbWrap.appendChild(el('img',{src:URL.createObjectURL(res.blob), style:'max-width:120px;border-radius:10px;margin-top:8px'})); toast('Label read — review & Save'); }
+    }catch(e){ toast('Couldn’t read label: '+(e.message||e)); }
+    finally{ scanBtn.disabled=false; scanBtn.innerHTML=prev; }
+  });
+
   const card=el('div',{class:'card stack'},[
     el('h2',{}, isNew?'Add product':'Edit product'),
+    scanBtn, thumbWrap,
     labeled('Category', catSel),
     labeled('Brand', brand),
     labeled('Name', name),
@@ -1032,11 +1183,13 @@ views.productEdit = (v, arg) => {
     labeled('Notes', notes),
     el('label',{class:'row', style:'gap:8px'},[ activeChk, el('span',{},'Active product for this category') ])
   ]);
-  if(prod.stripProfile) card.appendChild(el('div',{class:'hint'},'This is a test-strip product. Editing its pad order / chart values comes in Phase 2 (photo extraction); other fields here still save.'));
+  if(prod.stripProfile) card.appendChild(el('div',{class:'hint'},'This is a test-strip product. To re-read its pads/chart values from a new bottle, use “Scan test-strip bottle” on the Products page.'));
   v.appendChild(card);
+  if(prod.imagePath && !pendingImage) imageDownloadUrl(prod.imagePath).then(u=>{ if(u){ thumbWrap.innerHTML=''; thumbWrap.appendChild(el('img',{src:u, style:'max-width:120px;border-radius:10px;margin-top:8px'})); } });
 
   const err=el('div',{class:'err hidden'}); v.appendChild(err);
-  v.appendChild(el('button',{class:'btn', onclick:()=>{
+  v.appendChild(el('button',{class:'btn', onclick:async (e)=>{
+    const btn=e.target;
     if(!name.value.trim()){ err.textContent='Enter a product name.'; err.classList.remove('hidden'); return; }
     prod.category=catSel.value; prod.brand=brand.value.trim(); prod.name=name.value.trim();
     prod.activeIngredient=ingr.value.trim(); prod.dosePerGal=labelDose.value.trim()||null;
@@ -1044,6 +1197,7 @@ views.productEdit = (v, arg) => {
     prod.active=activeChk.checked; if(activeChk.checked) prod.archived=false;
     if(isNew) state.products.items.push(prod);
     if(prod.active) state.products.items.forEach(x=>{ if(x!==prod && x.category===prod.category && !x.stripProfile) x.active=false; });
+    if(pendingImage){ btn.disabled=true; btn.innerHTML='<span class="spin"></span> Saving photo…'; try{ const path='products/images/'+prod.id+'.jpg'; await uploadImage(path, pendingImage); prod.imagePath=path; }catch(e2){ toast('Saved, but photo upload failed: '+(e2.message||e2)); } }
     queueSave('products'); toast('Product saved'); go('products');
   }},'Save product'));
 
