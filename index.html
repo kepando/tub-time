@@ -372,14 +372,14 @@ const DEFAULT_RULES = `# Hot Tub Chemistry Rules (Ken's tub)
 
 function defaultSettings(){
   return {
-    schemaVersion:1,
+    schemaVersion:2,
     tub:{ model:'LifeSmart Leganza', persons:6, gallons:305, sanitizer:'bromine',
       tablets:'2 in filter compartment (primary) + 2–3 in floating dispenser (supplement)',
       filterCyclesHoursPerDay:4, idleTempF:'98–100', location:'Portland, OR', fillWater:'very soft' },
-    targets:{
-      alkalinity:{target:100, min:80, max:120, unit:'ppm'},
-      ph:{target:7.5, min:7.4, max:7.6, unit:''},
-      hardness:{target:150, min:150, max:250, unit:'ppm'},
+    targets:{  // ranges aligned to the LifeSmart manual (pH 7.2–7.8, TA 40–120, hardness 75–150, sanitizer 3–5)
+      alkalinity:{target:100, min:80, max:120, unit:'ppm'},   // upper half of the manual's 40–120, for stability
+      ph:{target:7.5, min:7.2, max:7.8, unit:''},
+      hardness:{target:100, min:75, max:150, unit:'ppm'},
       bromine:{target:4, min:3, max:5, unit:'ppm'}
     },
     typicalFreshFill:{ hardness:'0–25', alkalinity:'0–40', ph:'6.8–7.2', bromine:0 },
@@ -425,6 +425,15 @@ function defaultProducts(){
 const emptyColl = () => ({ schemaVersion:1, items:[] });
 
 // One-time upgrade of existing stores (products.json < v2): fill real SpaGuard enzyme dosing.
+// Correct existing settings (< v2) to the LifeSmart manual ranges (pH + hardness; leaves bromine/sanitizer alone).
+function migrateSettings(){
+  const s=state.settings; if(!s||!s.targets) return;
+  if((s.schemaVersion||1) < 2){
+    if(s.targets.ph){ s.targets.ph.min=7.2; s.targets.ph.max=7.8; }
+    if(s.targets.hardness){ s.targets.hardness.min=75; s.targets.hardness.max=150; s.targets.hardness.target=100; }
+    s.schemaVersion=2; queueSave('settings');
+  }
+}
 function migrateProducts(){
   const pr=state.products; if(!pr||!Array.isArray(pr.items)) return; let changed=false;
   if((pr.schemaVersion||1) < 2){
@@ -454,6 +463,7 @@ async function loadAll(){
   const r = await readFile(FILES.rules);
   if(r.missing){ state.rules=DEFAULT_RULES; await writeFile(FILES.rules, DEFAULT_RULES); }
   else state.rules = r.text;
+  migrateSettings();
   migrateProducts();
   // mirror snapshot
   const mir={}; for(const k in state) mir[k]=state[k]; mirrorSave(mir);
