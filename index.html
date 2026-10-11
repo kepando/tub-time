@@ -581,6 +581,8 @@ let route='dashboard';
 const views={};
 function go(r, arg){ route=r; arg&&(go._arg=arg); render(); document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.route===r)); window.scrollTo(0,0); }
 function render(){ const v=$('#view'); v.innerHTML=''; (views[route]||views.dashboard)(v, go._arg); go._arg=null; }
+// Re-render the session view in place WITHOUT jumping to the top (used by checklist step actions).
+function refreshSession(t){ const y=window.scrollY; go._arg=t.id; render(); window.scrollTo(0,y); }
 
 /* ---------- Can I soak? (at-a-glance soak-readiness) ---------- */
 function soakReadiness(){
@@ -783,16 +785,16 @@ views.session = (v, id) => {
       node.appendChild(el('small',{style:'display:block;margin-top:8px'}, rec.status==='skipped'?('Skipped: '+(rec.reason||'')):('Done'+(rec.amount!=null&&rec.amount!==s.amount?(' (amount '+rec.amount+')'):''))));
     } else {
       const ctr=el('div',{class:'row', style:'margin-top:10px;gap:8px;flex-wrap:wrap'});
-      ctr.appendChild(el('button',{class:'btn sm', onclick:()=>{ t.completedSteps.push({order:s.order, action:s.action, amount:s.amount, unit:s.unit, status:'done'}); queueSave('tests'); go('session',t.id); }},'✓ Done'));
+      ctr.appendChild(el('button',{class:'btn sm', onclick:()=>{ t.completedSteps.push({order:s.order, action:s.action, amount:s.amount, unit:s.unit, status:'done'}); queueSave('tests'); refreshSession(t); }},'✓ Done'));
       if(s.amount && s.unit && s.unit!=='none'){
         ctr.appendChild(el('button',{class:'btn sm sub', onclick:()=>{
           const val=prompt('Amount you actually used ('+s.unit+'):', s.amount); if(val==null) return;
-          t.completedSteps.push({order:s.order, action:s.action, amount:parseFloat(val), unit:s.unit, status:'done'}); queueSave('tests'); go('session',t.id);
+          t.completedSteps.push({order:s.order, action:s.action, amount:parseFloat(val), unit:s.unit, status:'done'}); queueSave('tests'); refreshSession(t);
         }},'Edit amount'));
       }
       ctr.appendChild(el('button',{class:'btn sm sub', onclick:()=>{
         const reason=prompt('Skip reason:','') ; if(reason==null) return;
-        t.completedSteps.push({order:s.order, action:s.action, status:'skipped', reason}); queueSave('tests'); go('session',t.id);
+        t.completedSteps.push({order:s.order, action:s.action, status:'skipped', reason}); queueSave('tests'); refreshSession(t);
       }},'Skip'));
       node.appendChild(ctr);
 
@@ -822,10 +824,10 @@ function timerNode(t, s){
   const disp=el('span',{class:'timer'},'');
   line.appendChild(disp);
   if(!end){
-    const start=el('button',{class:'btn sm', onclick:()=>{ t['timerEnd_'+s.order]=Date.now()+s.wait_minutes*60000; queueSave('tests'); go('session',t.id); }}, 'Start '+s.wait_minutes+' min timer');
+    const start=el('button',{class:'btn sm', onclick:()=>{ t['timerEnd_'+s.order]=Date.now()+s.wait_minutes*60000; queueSave('tests'); refreshSession(t); }}, 'Start '+s.wait_minutes+' min timer');
     line.appendChild(start);
   } else {
-    line.appendChild(el('button',{class:'btn sm sub', onclick:()=>{ delete t['timerEnd_'+s.order]; queueSave('tests'); go('session',t.id); }},'Reset'));
+    line.appendChild(el('button',{class:'btn sm sub', onclick:()=>{ delete t['timerEnd_'+s.order]; queueSave('tests'); refreshSession(t); }},'Reset'));
   }
   wrap.appendChild(line);
   if(end){
