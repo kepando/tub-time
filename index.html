@@ -326,6 +326,25 @@ function queueSave(key){
 }
 
 /* ---- seed defaults ---- */
+const RULES_MODE_MARKER = '## Sanitizer modes (bridge → chlorine)';
+const RULES_MODE_BLOCK = `## Sanitizer modes (bridge → chlorine) — updated 2026-10-11
+Bromine 1-inch tablets are RETIRED as of 2026-10-11 (pulled from the filter compartment and floater). The LifeSmart manual recommends granular sodium dichlor and warns against compressed tablets even in a floater — the corrosion lesson above is exactly why. Transitioning bromine → chlorine with a bridge period until the drain/refill (~Dec 27, 2026). Shock stays need-based, not a fixed weekly schedule.
+
+### Bridge mode (now → next drain): read the BROMINE pad
+- The water still holds a bromide bank; dichlor added now reactivates it, so it behaves like a granular bromine system. Read the BROMINE pad, not free chlorine.
+- Keep bromine above the 2 chip and up to the 6 chip; aim just under 6. At/near 2, add dichlor in ½-tsp steps (½ tsp ≈ +2 ppm, 1 tsp ≈ +4 ppm). Above 6, add nothing and let it drift down.
+- Jets on, cover off 10 min; retest after 30 min. After a soak, ½–1 tsp. Idle days, test every 2–3 days. Ignore CYA in bridge mode.
+
+### Chlorine mode (after the drain): read FREE CHLORINE
+- Free chlorine target 3–5 ppm (the 3 and 5 chips). 1 tsp dichlor ≈ +2 ppm free chlorine; ½–1 tsp after a soak; test every 1–2 days early on.
+- Combined chlorine (total − free) above 0.5 → shock (MPS, or 2–3 tsp dichlor).
+- CYA creeps up because dichlor is stabilized: check monthly; above ~50 ppm, drain early.
+- pH matters more: above 7.8, chlorine loses effectiveness — keep pH 7.2–7.8.
+- Fresh-fill startup order: pH → alkalinity → calcium → dichlor (2 tsp, then 1-tsp steps to 3–5), 1 tsp at a time with 30 min between.
+
+### Dichlor safety
+Store locked away from kids. Never let dry dichlor contact bromine tablets, MPS, or any other chemical. Always add chemical to water, never water or chemical to another chemical. Dispose of the retired bromine tablets at household hazardous waste, not the trash.`;
+
 const DEFAULT_RULES = `# Hot Tub Chemistry Rules (Ken's tub)
 
 ## Sequencing
@@ -368,11 +387,15 @@ const DEFAULT_RULES = `# Hot Tub Chemistry Rules (Ken's tub)
 
 ## Maintenance
 - Drain/refill quarterly (sooner if foam becomes unmanageable).
+
+${RULES_MODE_BLOCK}
 `;
 
 function defaultSettings(){
   return {
-    schemaVersion:2,
+    schemaVersion:3,
+    sanitizerMode:'bromine-bridge',   // 'bromine-bridge' (now) → 'chlorine' (set when a drain/refill is logged)
+    sanitizerModeSince:null,
     tub:{ model:'LifeSmart Leganza', persons:6, gallons:305, sanitizer:'bromine',
       tablets:'2 in filter compartment (primary) + 2–3 in floating dispenser (supplement)',
       filterCyclesHoursPerDay:4, idleTempF:'98–100', location:'Portland, OR', fillWater:'very soft' },
@@ -389,18 +412,33 @@ function defaultSettings(){
     apiKey:''
   };
 }
+const BRIDGE_CATEGORIES=['Chlorine (dichlor)','Filter cartridge','Line flush / cleaner','Hardness test kit'];
+function bridgeSeedProducts(){
+  const p=(o)=>Object.assign({ id:uid(), active:true, archived:false, dosePerGal:null, doseConverted:'', unit:'', warnings:'', imagePath:null, notes:'' }, o);
+  return [
+    p({ category:'Chlorine (dichlor)', brand:'', name:'Sodium dichlor granules', activeIngredient:'sodium dichloro-s-triazinetrione (dichlor)',
+      dosePerGal:'~2 tsp to reach 3–5 ppm (label)',
+      doseConverted:'Bridge (bromine pad): ½ tsp ≈ +2 ppm, 1 tsp ≈ +4 ppm. Chlorine mode: 1 tsp ≈ +2 ppm free chlorine. Fresh-fill startup: 2 tsp then 1-tsp steps to 3–5. ½–1 tsp after a soak.',
+      unit:'tsp',
+      warnings:'Store locked away from kids. NEVER let dry dichlor contact bromine tablets, MPS, or other chemicals. Always add chemical TO water — never water or chemical to another chemical. Jets on, cover off 10 min; retest after 30 min.',
+      notes:'Active sanitizer — bromine-bridge now, true chlorine after the 12/27 drain.' }),
+    p({ category:'Line flush / cleaner', brand:'', name:'Jet line flush / purge', doseConverted:'Per label', notes:'Pre-drain: run on 12/26, jets on high, cover off, before the 12/27 drain.' }),
+    p({ category:'Filter cartridge', brand:'', name:'Replacement filter cartridge', notes:'Install fresh at the 12/27 drain.' }),
+    p({ category:'Hardness test kit', brand:'', name:'Liquid calcium-hardness test kit', active:false, notes:'Optional — finer hardness resolution than the strip pad (the manual recommends a dedicated hardness test).' })
+  ];
+}
 function defaultProducts(){
   const p = (o)=>Object.assign({ id:uid(), active:true, archived:false, dosePerGal:null, doseConverted:'', unit:'', warnings:'', imagePath:null, notes:'' }, o);
   return {
-    schemaVersion:2,
-    categories:['Test strips','Bromine tablets','Calcium (hardness) increaser','Alkalinity increaser','Shock','pH Up','pH Down','Anti-foam','Enzyme clarifier'],
+    schemaVersion:3,
+    categories:['Test strips','Bromine tablets','Calcium (hardness) increaser','Alkalinity increaser','Shock','pH Up','pH Down','Anti-foam','Enzyme clarifier'].concat(BRIDGE_CATEGORIES),
     items:[
       p({ category:'Alkalinity increaser', brand:'Oester', name:'Alkalinity Up', activeIngredient:'sodium bicarbonate' }),
       p({ category:'pH Up', brand:'Oester', name:'pH Up', activeIngredient:'sodium carbonate' }),
       p({ category:'pH Down', brand:'Oester', name:'pH Down', activeIngredient:'sodium bisulfate', warnings:'Only when pH is above ~7.8.' }),
       p({ category:'Calcium (hardness) increaser', brand:'Oester', name:'Calcium Increaser', activeIngredient:'calcium chloride (liquid)', doseConverted:'≈ ¼ cup raises hardness ~23 ppm in 305 gal', unit:'cup' }),
       p({ category:'Shock', brand:'SpaGuard', name:'Enhanced Shock', activeIngredient:'non-chlorine MPS (potassium monopersulfate)', dosePerGal:'3 tbsp / 500 gal (label)', doseConverted:'≈ 5½ tsp per dose for 305 gal', unit:'tsp' }),
-      p({ category:'Bromine tablets', brand:'Bromiguard', name:'1-inch bromine tablets', activeIngredient:'bromine (BCDMH)', doseConverted:'2 in filter compartment + 2–3 in floater', unit:'tablet' }),
+      p({ category:'Bromine tablets', brand:'Bromiguard', name:'1-inch bromine tablets', activeIngredient:'bromine (BCDMH)', active:false, archived:true, doseConverted:'Retired', unit:'tablet', notes:'Retired 2026-10-11 (switching to dichlor). Dispose at household hazardous waste — not the trash. Never store next to or let contact dichlor/MPS.' }),
       p({ category:'Anti-foam', brand:'', name:'Foam reducer / defoamer', activeIngredient:'', doseConverted:'HALF label dose; last, after shock has circulated', unit:'' }),
       p({ category:'Enzyme clarifier', brand:'SpaGuard', name:'Natural Spa Enzyme', activeIngredient:'natural enzyme blend (biodegradable); bromine- & chlorine-compatible',
         dosePerGal:'2 tbsp (1 fl oz) per 100 gal (label)',
@@ -419,7 +457,7 @@ function defaultProducts(){
           { name:'pH', unit:'', chart:[6.2,6.8,7.2,7.6,7.8,8.4] }
         ]
       }})
-    ]
+    ].concat(bridgeSeedProducts())
   };
 }
 const emptyColl = () => ({ schemaVersion:1, items:[] });
@@ -427,12 +465,18 @@ const emptyColl = () => ({ schemaVersion:1, items:[] });
 // One-time upgrade of existing stores (products.json < v2): fill real SpaGuard enzyme dosing.
 // Correct existing settings (< v2) to the LifeSmart manual ranges (pH + hardness; leaves bromine/sanitizer alone).
 function migrateSettings(){
-  const s=state.settings; if(!s||!s.targets) return;
+  const s=state.settings; if(!s||!s.targets) return; let changed=false;
   if((s.schemaVersion||1) < 2){
     if(s.targets.ph){ s.targets.ph.min=7.2; s.targets.ph.max=7.8; }
     if(s.targets.hardness){ s.targets.hardness.min=75; s.targets.hardness.max=150; s.targets.hardness.target=100; }
-    s.schemaVersion=2; queueSave('settings');
+    s.schemaVersion=2; changed=true;
   }
+  if((s.schemaVersion||1) < 3){
+    if(!s.sanitizerMode) s.sanitizerMode='bromine-bridge';
+    if(s.sanitizerModeSince===undefined) s.sanitizerModeSince=null;
+    s.schemaVersion=3; changed=true;
+  }
+  if(changed) queueSave('settings');
 }
 function migrateProducts(){
   const pr=state.products; if(!pr||!Array.isArray(pr.items)) return; let changed=false;
@@ -449,7 +493,27 @@ function migrateProducts(){
     }
     pr.schemaVersion=2; changed=true;
   }
+  if((pr.schemaVersion||1) < 3){
+    pr.categories = pr.categories || [];
+    BRIDGE_CATEGORIES.forEach(c=>{ if(!pr.categories.includes(c)) pr.categories.push(c); });
+    // retire bromine tablets
+    pr.items.filter(x=> x.category==='Bromine tablets' && !x.archived).forEach(x=>{
+      x.active=false; x.archived=true; x.doseConverted='Retired';
+      x.notes=(x.notes?x.notes+' ':'')+'Retired 2026-10-11 (switching to dichlor). Dispose at household hazardous waste — not the trash. Never store next to or let contact dichlor/MPS.';
+    });
+    // add dichlor + pre-drain supplies if not already present
+    if(!pr.items.some(x=> x.category==='Chlorine (dichlor)')) bridgeSeedProducts().forEach(np=> pr.items.push(np));
+    pr.schemaVersion=3; changed=true;
+  }
   if(changed) queueSave('products');
+}
+
+// Append the bridge/chlorine sections to an existing rules.md once (preserves any edits).
+function migrateRules(){
+  if(typeof state.rules==='string' && state.rules.indexOf(RULES_MODE_MARKER)===-1){
+    state.rules = state.rules.replace(/\s*$/,'') + '\n\n' + RULES_MODE_BLOCK + '\n';
+    queueSave('rules');
+  }
 }
 
 async function loadAll(){
@@ -465,6 +529,7 @@ async function loadAll(){
   else state.rules = r.text;
   migrateSettings();
   migrateProducts();
+  migrateRules();
   // mirror snapshot
   const mir={}; for(const k in state) mir[k]=state[k]; mirrorSave(mir);
   setSync('ok');
@@ -488,17 +553,35 @@ function soaksSince(iso){ const since=iso?new Date(iso):new Date(0); return sort
 /* ============================================================
    CLAUDE — treatment plan generation
    ============================================================ */
+function sanitizerModeBlock(){
+  if(sanMode()==='chlorine'){
+    return `## ACTIVE SANITIZER MODE: CHLORINE (sodium dichlor granules) — read FREE CHLORINE
+- Free chlorine target 3–5 ppm (the 3 and 5 chips on the chlorine pad). Dose with sodium dichlor granules.
+- Combined chlorine = Total Chlorine − Free Chlorine. If combined > 0.5 ppm, recommend a shock (non-chlorine MPS, or 2–3 tsp dichlor).
+- Dosing: 1 tsp dichlor ≈ +2 ppm free chlorine. After a soak add ½–1 tsp. Jets on, cover off 10 min; retest after 30 min. Idle days: test every 1–2 days early on.
+- Fresh-fill startup (after pH → alkalinity → calcium are set, in that order): 2 tsp dichlor, then 1-tsp steps to reach 3–5.
+- Cyanuric acid (CYA): check monthly; above ~50 ppm, recommend draining early (dichlor adds CYA over time).
+- pH matters more now: above 7.8, warn that chlorine loses effectiveness. Keep pH 7.2–7.8.`;
+  }
+  return `## ACTIVE SANITIZER MODE: BROMINE BRIDGE — read the BROMINE pad (NOT free chlorine)
+- Bromine 1-inch tablets are RETIRED (pulled 2026-10-11). The tub still holds a bromide bank; sodium dichlor granules added now reactivate it, so it behaves like a granular bromine system until the next drain (~Dec 27 2026). Measure on the BROMINE pad.
+- OK range: above the 2 chip up to the 6 chip — aim just under 6. Above 6: DO NOT dose; tell Ken to let it drift down. At or near the 2 chip: dose.
+- Dosing: sodium dichlor granules in ½-tsp steps. ½ tsp ≈ +2 ppm bromine, 1 tsp ≈ +4 ppm. Jets on, cover off 10 min; retest after 30 min. After a soak add ½–1 tsp. Idle days: test every 2–3 days.
+- IGNORE the cyanuric acid pad in this mode. This is a temporary bridge; true chlorine starts after the drain.`;
+}
 function buildSystemPrompt(){
   const s=state.settings, t=s.targets;
   return state.rules + `
 
 ## Tub profile
-Model: ${s.tub.model} — ${s.tub.persons}-person, ~${s.tub.gallons} gallons. Sanitizer: ${s.tub.sanitizer}.
-Tablets: ${s.tub.tablets}. Filter cycles: ~${s.tub.filterCyclesHoursPerDay} hrs/day. Idle temp: ${s.tub.idleTempF}°F. Location: ${s.tub.location}; fill water ${s.tub.fillWater}.
+Model: ${s.tub.model} — ${s.tub.persons}-person, ~${s.tub.gallons} gallons.
+Filter cycles: ~${s.tub.filterCyclesHoursPerDay} hrs/day. Idle temp: ${s.tub.idleTempF}°F. Location: ${s.tub.location}; fill water ${s.tub.fillWater}.
 Measuring tools: teaspoons and cups only — every dose must be in tsp/cup (or tablets). No tablespoons or fluid ounces.
 
 ## Targets
-Alkalinity ~${t.alkalinity.target} ppm (band ${t.alkalinity.min}–${t.alkalinity.max}). pH ${t.ph.min}–${t.ph.max}. Hardness ~${t.hardness.target} ppm (${t.hardness.min}–${t.hardness.max} acceptable). Bromine ${t.bromine.min}–${t.bromine.max} ppm.
+Alkalinity ~${t.alkalinity.target} ppm (band ${t.alkalinity.min}–${t.alkalinity.max}). pH ${t.ph.min}–${t.ph.max}. Hardness ~${t.hardness.target} ppm (band ${t.hardness.min}–${t.hardness.max}).
+
+${sanitizerModeBlock()}
 
 You are Ken's hot tub assistant. Open with the single priority, give numbered steps in order (alkalinity first when needed), each with the exact dose in tsp/cup/tablet for ${s.tub.gallons} gal, the product, jets, lid, and circulation time, plus a short "why". Flag strip artifacts before dosing against suspicious numbers. Give a "leave alone" line for in-range parameters and a clear soak-readiness call. Be honest, including when the answer is "drain it".
 
@@ -523,7 +606,8 @@ function buildUserContent(session){
   const minutes = since.reduce((a,x)=>a+(+x.durationMin||0),0);
   const drain=lastDrain();
   const prods = activeProducts().filter(p=>!p.stripProfile).map(p=>`- ${p.category}: ${p.brand} ${p.name}${p.activeIngredient?(' ('+p.activeIngredient+')'):''}${p.doseConverted?(' — dose: '+p.doseConverted):''}`).join('\n');
-  return `Current readings (in strip order${strip?', '+strip.name:''}), taken ${fmtDate(session.timestamp)}:
+  return `Active sanitizer mode: ${(session.sanitizerMode||sanMode())==='chlorine'?'CHLORINE (read free chlorine, target 3–5)':'BROMINE BRIDGE (read the bromine pad, keep 2–6, aim just under 6)'}.
+Current readings (in strip order${strip?', '+strip.name:''}), taken ${fmtDate(session.timestamp)}:
 ${readings}
 Time since last test: ${lt?agoText(lt.timestamp):'n/a (first test)'}.
 
@@ -645,14 +729,32 @@ async function scanProductInto(fields, setBusy){
 /* ============================================================
    READING EVALUATION (color coding vs targets)
    ============================================================ */
-function evalReading(name, value){
-  const n=name.toLowerCase(); const v=parseFloat(String(value).split('–')[0]);
-  const t=state.settings.targets; let band=null;
-  if(n.includes('alkalin')) band=t.alkalinity; else if(n==='ph'||n.includes('ph')) band=t.ph;
-  else if(n.includes('hard')) band=t.hardness; else if(n.includes('bromine')) band=t.bromine;
-  if(!band || isNaN(v)) return 'neutral';
-  if(v<band.min || v>band.max) return (v<band.min*0.5||v>band.max*1.5)?'bad':'warn';
-  return 'good';
+const sanMode = () => (state.settings && state.settings.sanitizerMode) || 'bromine-bridge';
+const modeLabel = (m) => (m||sanMode())==='chlorine' ? 'Chlorine (dichlor)' : 'Bromine bridge';
+function numVal(value){ const parts=String(value).split('–').map(s=>parseFloat(s)).filter(x=>!isNaN(x)); return parts.length ? parts.reduce((a,b)=>a+b,0)/parts.length : NaN; }
+function bandColor(v, band){ if(!band) return 'neutral'; if(v<band.min||v>band.max) return (v<band.min*0.5||v>band.max*1.5)?'bad':'warn'; return 'good'; }
+function evalReading(name, value, mode){
+  mode = mode||sanMode();
+  const n=name.toLowerCase(); const v=numVal(value); const t=state.settings.targets;
+  if(isNaN(v)) return 'neutral';
+  if(n.includes('alkalin')) return bandColor(v, t.alkalinity);
+  if(n.includes('hard'))    return bandColor(v, t.hardness);
+  if(n==='ph' || (n.includes('ph') && !n.includes('chlor'))) return bandColor(v, t.ph);
+  if(n.includes('bromine')){
+    if(mode!=='bromine-bridge') return 'neutral';
+    if(v<=2) return v<2?'bad':'warn';   // at/near 2 chip → dose
+    if(v>6) return 'warn';              // above 6 → let it drift down
+    return 'good';                      // (2,6]
+  }
+  if(n.includes('free') && n.includes('chlor')){
+    if(mode!=='chlorine') return 'neutral';
+    if(v<3) return v<1?'bad':'warn';
+    if(v>5) return v>10?'bad':'warn';
+    return 'good';                      // 3–5
+  }
+  if(n.includes('total') && n.includes('chlor')) return 'neutral'; // feeds combined-chlorine calc, not graded alone
+  if(n.includes('cyanuric')||n.includes('cya')) return mode==='chlorine' ? (v>50?'warn':'good') : 'neutral';
+  return 'neutral';
 }
 
 /* ============================================================
@@ -666,8 +768,23 @@ function render(){ const v=$('#view'); v.innerHTML=''; (views[route]||views.dash
 function refreshSession(t){ const y=window.scrollY; go._arg=t.id; render(); window.scrollTo(0,y); }
 
 /* ---------- Can I soak? (at-a-glance soak-readiness) ---------- */
+function sanitizerReadinessFromReadings(lt, mode){
+  const val=(re)=>{ const r=(lt.readings||[]).find(re); return r? numVal(r.value): NaN; };
+  if(mode==='bromine-bridge'){
+    const v=val(r=>/bromine/i.test(r.name));
+    if(isNaN(v)) return {level:'unknown', label:'Unsure', note:'No bromine reading on the last test.'};
+    if(v<=2) return {level:'no',    label:'Not yet', note:`Bromine reads ${v} — at/near the 2 chip; add dichlor first.`};
+    if(v>6)  return {level:'maybe', label:'Not yet', note:`Bromine reads ${v} — above 6; let it drift down before soaking.`};
+    return {level:'yes', label:'Yes', note:'Bromine is in the 2–6 bridge range.'};
+  }
+  const fc=val(r=>/free/i.test(r.name) && /chlor/i.test(r.name));
+  if(isNaN(fc)) return {level:'unknown', label:'Unsure', note:'No free-chlorine reading on the last test.'};
+  if(fc<3) return {level:'no',    label:'Not yet', note:`Free chlorine ${fc} ppm — below 3; add dichlor first.`};
+  if(fc>5) return {level:'maybe', label:'Not yet', note:`Free chlorine ${fc} ppm — above 5; let it come down.`};
+  return {level:'yes', label:'Yes', note:`Free chlorine ${fc} ppm — in the 3–5 range.`};
+}
 function soakReadiness(){
-  const lt=lastTest();
+  const lt=lastTest(); const mode=sanMode();
   if(!lt) return {level:'unknown', label:'Run a test', note:'No test logged yet — run a test to find out.'};
   let base;
   if(lt.plan && lt.plan.soak_ready){
@@ -676,11 +793,7 @@ function soakReadiness(){
          : sr==='no'   ? {level:'no',    label:'Not today', note:lt.plan.soak_ready_note||'See the treatment plan.'}
          :               {level:'maybe', label:'Not yet',   note:lt.plan.soak_ready_note||'After you finish today’s treatment steps.'};
   } else {
-    const br=parseFloat(String((lt.readings.find(r=>/bromine/i.test(r.name))||{}).value));
-    base = isNaN(br) ? {level:'unknown', label:'Unsure',  note:'No bromine reading on the last test.'}
-         : br<3      ? {level:'no',      label:'Not yet', note:`Bromine ${br} ppm — below the 3–5 range. Shock/add tablets first.`}
-         : br>5      ? {level:'maybe',   label:'Not yet', note:`Bromine ${br} ppm — above 5; let it come down before soaking.`}
-         :             {level:'yes',     label:'Yes',     note:`Bromine ${br} ppm — in the 3–5 range.`};
+    base = sanitizerReadinessFromReadings(lt, lt.sanitizerMode||mode);
   }
   const ls=lastSoak();
   if(ls && new Date(ls.datetime) > new Date(lt.timestamp)){
@@ -715,12 +828,13 @@ views.dashboard = (v) => {
   if(lt){
     const card=el('div',{class:'card', onclick:()=>go('session', lt.id)},[ el('div',{class:'row between'},[el('h3',{},'Last test'), el('small',{},agoText(lt.timestamp))]) ]);
     const chips=el('div',{class:'chips', style:'margin-top:8px'});
-    lt.readings.forEach(r=> chips.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value)}, `${r.name.split(' ').pop()}: ${r.value}`)) );
+    lt.readings.forEach(r=> chips.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value,lt.sanitizerMode)}, `${r.name.split(' ').pop()}: ${r.value}`)) );
     card.appendChild(chips); v.appendChild(card);
   }
 
   v.appendChild(el('div',{class:'card'},[
     el('h3',{},'At a glance'),
+    kv('Sanitizer', modeLabel() + (sanMode()==='bromine-bridge'?' · until drain':'')),
     kv('Last treatment', ltr? `${agoText(ltr.timestamp)} — ${trunc((ltr.completedSteps||[]).filter(s=>s.status==='done'&&s.action).map(s=>s.action.split(/[.:]/)[0].trim()).join(', '),70)||'logged'}` : 'none'),
     kv('Last soak', ls? `${agoText(ls.datetime)} — ${ls.durationMin||'?'} min, ${ls.people||'?'} ${(+ls.people===1)?'person':'people'}` : 'none'),
     kv('Water age', drain? `${daysSince(drain.date)} days since refill` : 'not logged'),
@@ -752,7 +866,7 @@ function upcomingItems(){
 views.test = (v) => {
   const strip=activeStrip();
   if(!strip){ v.appendChild(emptyState('No test strip profile yet','Add a test-strip product in Products to build the test form.')); return; }
-  const session = { id:uid(), timestamp:nowISO(), stripProfileId:strip.id, readings:[], notes:'', planToSoak:{planning:false} };
+  const session = { id:uid(), timestamp:nowISO(), stripProfileId:strip.id, sanitizerMode:sanMode(), readings:[], notes:'', planToSoak:{planning:false} };
 
   v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'🔆 <b>Before testing:</b> run jets on high 15–20 min, read at 30 seconds, in good light.'}) ]));
 
@@ -827,7 +941,7 @@ views.session = (v, id) => {
   const rc=el('div',{class:'card tight'});
   rc.appendChild(el('div',{class:'row between'},[el('h3',{},'Readings'), el('small',{},fmtDate(t.timestamp))]));
   const rch=el('div',{class:'chips', style:'margin-top:8px'});
-  (t.readings||[]).forEach(r=> rch.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value)}, `${r.name}: ${r.value}`)) );
+  (t.readings||[]).forEach(r=> rch.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value,t.sanitizerMode)}, `${r.name}: ${r.value}`)) );
   rc.appendChild(rch); v.appendChild(rc);
 
   if(!t.plan){
@@ -889,7 +1003,7 @@ views.session = (v, id) => {
   if(p.going_forward) v.appendChild(el('div',{class:'card tight'},[ el('small',{html:'📌 <b>Going forward:</b> '+p.going_forward}) ]));
 
   if(t.retest){
-    v.appendChild(el('div',{class:'card'},[ el('h3',{},'Retest'), el('div',{class:'chips'}, (t.retest.readings||[]).map(r=>el('span',{class:'pill '+evalReading(r.name,r.value)}, r.name+': '+r.value))),
+    v.appendChild(el('div',{class:'card'},[ el('h3',{},'Retest'), el('div',{class:'chips'}, (t.retest.readings||[]).map(r=>el('span',{class:'pill '+evalReading(r.name,r.value,t.sanitizerMode)}, r.name+': '+r.value))),
       t.retest.plan? el('p',{style:'margin-top:8px'}, t.retest.plan.summary) : (t.retest.raw?el('pre',{class:'raw'},t.retest.raw):null) ]));
   }
 
@@ -991,7 +1105,7 @@ views.log = (v) => {
   list.forEach(t=>{
     const steps=(t.completedSteps||[]).filter(s=>s.status==='done').length;
     const chips=el('div',{class:'chips', style:'margin-top:6px'});
-    (t.readings||[]).slice(0,7).forEach(r=> chips.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value)}, r.value)) );
+    (t.readings||[]).slice(0,7).forEach(r=> chips.appendChild(el('span',{class:'pill '+evalReading(r.name,r.value,t.sanitizerMode)}, r.value)) );
     const rowInner=el('div',{class:'listrow', style:'cursor:pointer', onclick:()=>go('session',t.id)},[
       el('div',{style:'flex:1'},[ el('b',{}, fmtDate(t.timestamp)), chips ]),
       el('small',{}, steps+' step'+(steps===1?'':'s')+' ✓')
@@ -1022,6 +1136,19 @@ const MAINT_TYPES=[
 ];
 views.maintenance = (v) => {
   v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('more'), style:'margin-bottom:10px'},'← More'));
+  if(sanMode()==='bromine-bridge'){
+    v.appendChild(el('div',{class:'card'},[
+      el('h3',{},'🪣 Drain-day transition (→ chlorine) · ~Dec 27'),
+      el('div',{class:'hint', style:'margin-bottom:6px'},'Logging the drain/refill below switches the app to chlorine mode.'),
+      el('ol',{style:'margin:0 0 0 18px;padding:0;font-size:.9rem;line-height:1.6'},[
+        el('li',{},'12/26: run the line flush per label — jets on high, cover off.'),
+        el('li',{},'12/27: drain; wipe the shell and filter compartment; install the new filter cartridge.'),
+        el('li',{},'Refill and circulate 30 minutes.'),
+        el('li',{},'Balance in order, 1 tsp at a time, 30 min between: pH → alkalinity → calcium → dichlor startup.'),
+        el('li',{},'Log the drain/refill below, then run a Test — Claude gives the chlorine startup plan.')
+      ])
+    ]));
+  }
   const typeSel=el('select',{}, MAINT_TYPES.map(t=>el('option',{value:t.v}, t.label)));
   const dt=el('input',{type:'datetime-local'}); dt.value=localInput(new Date());
   const cost=el('input',{type:'number', placeholder:'0.00', min:'0', step:'0.01'});
@@ -1043,6 +1170,10 @@ views.maintenance = (v) => {
         partNumber:(typeSel.value==='repair'?partNum.value.trim():'')||null,
         notes:notes.value.trim() };
       state.maintenance.items.push(m); queueSave('maintenance');
+      if(m.type==='drain-refill' && sanMode()!=='chlorine' && confirm('A drain/refill is the bromine→chlorine switch. Switch the app to CHLORINE mode now?')){
+        state.settings.sanitizerMode='chlorine'; state.settings.sanitizerModeSince=nowISO(); queueSave('settings');
+        toast('Refill logged — switched to chlorine mode'); go('maintenance'); return;
+      }
       toast(m.type==='drain-refill'?'Refill logged — water age reset':'Maintenance logged'); go('maintenance');
     }},'Save entry')
   ]));
@@ -1231,6 +1362,14 @@ views.rules = (v) => {
 views.settings = (v) => {
   v.appendChild(el('button',{class:'btn sm sub', onclick:()=>go('more'), style:'margin-bottom:10px'},'← More'));
   const s=state.settings;
+
+  // Sanitizer mode
+  const modeSel=el('select',{}, [['bromine-bridge','Bromine bridge (dichlor, read bromine pad)'],['chlorine','Chlorine (dichlor, read free chlorine)']]
+    .map(([val,lbl])=> el('option', val===sanMode()?{value:val,selected:'selected'}:{value:val}, lbl)));
+  v.appendChild(el('div',{class:'card stack'},[ el('h3',{},'Sanitizer mode'),
+    el('small',{html:'Drives targets, dosing, the plan, and “Can I soak?”. Normally this flips to <b>Chlorine</b> automatically when you log the drain/refill; change it here only to override.'}),
+    modeSel,
+    el('button',{class:'btn sm', onclick:()=>{ s.sanitizerMode=modeSel.value; s.sanitizerModeSince=nowISO(); queueSave('settings'); toast('Sanitizer mode: '+modeLabel(s.sanitizerMode)); go('settings'); }},'Save mode') ]));
 
   // API key
   const keyInput=el('input',{type:'password', placeholder:'sk-ant-…', value:s.apiKey||''});
